@@ -1,18 +1,22 @@
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
+import { NextResponse } from 'next/server'
+import { getServerSession } from '@/lib/supabase/server'
 
-export async function GET(_request: Request) {
-  const supabase = createRouteHandlerClient({ cookies })
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+import { InsightsService } from '@/services/insights.service'
 
-  const { data: suggestions, error } = await supabase
-    .from('suggestions')
-    .select('*')
-    .eq('user_id', user.id)
-    .order('created_at', { ascending: false })
-    .limit(5)
+export async function GET() {
+  try {
+    const session = await getServerSession()
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
-  if (error) return Response.json({ error }, { status: 400 })
-  return Response.json({ suggestions }, { status: 200 })
+    const suggestions = await InsightsService.getSuggestions(session.user.id)
+
+    return NextResponse.json({ suggestions }, { status: 200 })
+  } catch (error) {
+    if (error instanceof Error) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+    return NextResponse.json({ error: 'Unknown error' }, { status: 400 })
+  }
 }

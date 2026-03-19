@@ -1,23 +1,24 @@
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
+import { NextResponse } from 'next/server'
+import { getServerSession } from '@/lib/supabase/server'
+
+import { FeedbackService } from '@/services/feedback.service'
 
 export async function POST(request: Request) {
-  const supabase = createRouteHandlerClient({ cookies })
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+  try {
+    const session = await getServerSession()
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
-  const body = await request.json()
-  const { suggestion_id, reaction } = body
+    const { suggestion_id, reaction } = await request.json()
+    
+    const feedback = await FeedbackService.submitFeedback(suggestion_id, reaction)
 
-  const { data: feedback, error } = await supabase
-    .from('feedback')
-    .insert({
-      suggestion_id,
-      reaction
-    })
-    .select()
-    .single()
-
-  if (error) return Response.json({ error }, { status: 400 })
-  return Response.json({ feedback }, { status: 201 })
+    return NextResponse.json({ feedback }, { status: 201 })
+  } catch (error) {
+    if (error instanceof Error) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+    return NextResponse.json({ error: 'Unknown error' }, { status: 400 })
+  }
 }

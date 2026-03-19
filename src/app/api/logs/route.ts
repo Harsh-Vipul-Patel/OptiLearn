@@ -1,51 +1,62 @@
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
+import { NextResponse } from 'next/server'
+import { getServerSession } from '@/lib/supabase/server'
+
+import { LogsService } from '@/services/logs.service'
 import { triggerEngineAnalysis } from '@/lib/engineClient'
 
-export async function POST(request: Request) {
-  const supabase = createRouteHandlerClient({ cookies })
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+export async function GET() {
+  try {
+    const session = await getServerSession()
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
-  const body = await request.json()
-  const { data: log, error } = await supabase
-    .from('study_logs')
-    .insert({ ...body, user_id: user.id })
-    .select()
-    .single()
+    const logs = await LogsService.getLogs(session.user.id)
 
-  if (error) return Response.json({ error }, { status: 400 })
-
-  // We need to fetch the related plan, topic, and subject to get complexity and category
-  const { data: plan } = await supabase
-    .from('daily_plans')
-    .select(`
-      target_duration,
-      study_topics (
-        complexity,
-        subjects (
-          category
-        )
-      )
-    `)
-    .eq('id', log.plan_id)
-    .single()
-
-  if (plan && plan.study_topics && plan.study_topics.subjects) {
-    // Fire-and-forget engine analysis
-    triggerEngineAnalysis({
-      log_id: log.id,
-      plan_id: log.plan_id,
-      start_time: log.start_time,
-      end_time: log.end_time,
-      focus_level: log.focus_level,
-      distractions: log.distractions || '',
-      reflection: log.reflection || '',
-      target_duration: plan.target_duration,
-      subject_category: plan.study_topics.subjects.category || 'General',
-      topic_complexity: plan.study_topics.complexity || 'Medium'
-    }).catch(console.error)
+    return NextResponse.json({ logs }, { status: 200 })
+  } catch (error) {
+    if (error instanceof Error) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+    return NextResponse.json({ error: 'Unknown error' }, { status: 400 })
   }
+}
 
-  return Response.json({ log_id: log.id }, { status: 201 })
+export async function POST(request: Request) {
+  try {
+    const session = await getServerSession()
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const body = await request.json()
+    const log = await LogsService.createLog(body, session.user.id)
+
+    // Fire-and-forget engine analysis
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const plan: any = await LogsService.getPlanDetailsForAnalysis(log.plan_id)
+
+    if (plan && plan.studyTopic && plan.studyTopic.subject) {
+      triggerEngineAnalysis({
+        log_id: log.id,
+        user_id: session.user.id,
+        plan_id: log.plan_id,
+        start_time: log.start_time.toISOString(),
+        end_time: log.end_time.toISOString(),
+        focus_level: log.focus_level,
+        distractions: log.distractions || '',
+        reflection: log.reflection || '',
+        target_duration: plan.target_duration,
+        subject_category: plan.studyTopic.subject.category || 'General',
+        topic_complexity: plan.studyTopic.complexity || 'Medium'
+      }).catch(console.error)
+    }
+
+    return NextResponse.json({ log_id: log.id }, { status: 201 })
+  } catch (error) {
+    if (error instanceof Error) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+    return NextResponse.json({ error: 'Unknown error' }, { status: 400 })
+  }
 }

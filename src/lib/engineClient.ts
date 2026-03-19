@@ -1,9 +1,10 @@
 // src/lib/engineClient.ts
-const ENGINE_URL = process.env.ENGINE_API_URL   // Railway URL
+const ENGINE_URL = process.env.ENGINE_API_URL
 const ENGINE_KEY = process.env.ENGINE_API_KEY
 
 export interface AnalyzePayload {
   log_id: string;
+  user_id: string;
   plan_id: string;
   start_time: string;
   end_time: string;

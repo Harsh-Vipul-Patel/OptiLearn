@@ -1,349 +1,100 @@
-'use client';
+'use client'
 
-import { useState } from 'react';
-import dynamic from 'next/dynamic';
-import OLLogo from '@/components/OLLogo';
-import { SatIcon, ActIcon, ApExamsIcon, IbDiplomaIcon } from '@/components/ExamIcons';
+import Link from 'next/link'
+import { useSession, signOut } from '@/components/Providers'
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 
-const ParticleBackground = dynamic(() => import('@/components/ParticleBackground'), { ssr: false });
+export default function LandingPage() {
+  const { data: session } = useSession()
+  const router = useRouter()
 
-const EXAM_TARGETS = [
-  { id: 'SAT', label: 'SAT', Icon: SatIcon },
-  { id: 'ACT', label: 'ACT', Icon: ActIcon },
-  { id: 'AP', label: 'AP Exams', Icon: ApExamsIcon },
-  { id: 'IB', label: 'IB Diploma', Icon: IbDiplomaIcon },
-];
-
-export default function AuthPage() {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [selectedExam, setSelectedExam] = useState('SAT');
+  useEffect(() => {
+    if (session) router.push('/dashboard')
+  }, [session, router])
 
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        width: '100%',
-        /* Deep space navy — same as reference */
-        background: `
-          radial-gradient(ellipse 70% 55% at 15% 50%, rgba(0,80,130,0.22) 0%, transparent 60%),
-          radial-gradient(ellipse 70% 55% at 85% 40%, rgba(0,60,110,0.18) 0%, transparent 60%),
-          radial-gradient(ellipse 100% 80% at 50% 100%, rgba(0,40,90,0.35) 0%, transparent 60%),
-          linear-gradient(180deg, #020b1a 0%, #040f22 40%, #020a18 100%)
-        `,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        position: 'relative',
-        overflow: 'hidden',
-      }}
-    >
-      {/* Animated particle canvas */}
-      <ParticleBackground />
-
-      {/* Large ambient teal blobs — give the deep-space glow from the image */}
-      <div style={{
-        position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0,
-      }}>
-        {/* Left cluster */}
-        <div style={{
-          position: 'absolute', top: '20%', left: '-8%',
-          width: 380, height: 380,
-          background: 'radial-gradient(circle, rgba(0,180,220,0.14) 0%, transparent 70%)',
-          borderRadius: '50%', filter: 'blur(40px)',
-        }} />
-        {/* Right cluster */}
-        <div style={{
-          position: 'absolute', bottom: '18%', right: '-6%',
-          width: 340, height: 340,
-          background: 'radial-gradient(circle, rgba(0,140,200,0.12) 0%, transparent 70%)',
-          borderRadius: '50%', filter: 'blur(40px)',
-        }} />
-        {/* Top-center subtle glow */}
-        <div style={{
-          position: 'absolute', top: '-5%', left: '30%',
-          width: 300, height: 200,
-          background: 'radial-gradient(ellipse, rgba(0,160,210,0.09) 0%, transparent 70%)',
-          filter: 'blur(30px)',
-        }} />
-        {/* Bottom glow */}
-        <div style={{
-          position: 'absolute', bottom: '-8%', left: '20%',
-          width: 400, height: 250,
-          background: 'radial-gradient(ellipse, rgba(0,100,180,0.10) 0%, transparent 70%)',
-          filter: 'blur(50px)',
-        }} />
-      </div>
-
-      {/* "Auth Portal" — top right */}
-      <div style={{
-        position: 'fixed', top: 22, right: 28,
-        fontSize: 13, fontWeight: 400,
-        color: 'rgba(200,230,255,0.45)',
-        letterSpacing: '0.04em',
-        zIndex: 10,
-      }}>
-        Auth Portal
-      </div>
-
-      {/* ═══════════════════════════════════════════
-          AUTH CARD — 3-D floating glass panel
-      ═══════════════════════════════════════════ */}
-      <div
-        className="auth-card"
-        style={{
-          position: 'relative', zIndex: 5,
-          width: '100%', maxWidth: 430,
-          borderRadius: 18,
-          padding: '34px 34px 26px',
-          margin: '0 16px',
-        }}
-      >
-        {/* Inner top specular highlight line */}
-        <div style={{
-          position: 'absolute', top: 0, left: '10%', right: '10%', height: 1,
-          background: 'linear-gradient(90deg, transparent, rgba(0,220,240,0.40), transparent)',
-          borderRadius: 1,
-        }} />
-
-        {/* Logo */}
-        <OLLogo />
-
-        {/* Title */}
-        <h1 style={{
-          fontSize: 27,
-          fontWeight: 800,
-          color: '#ffffff',
-          textAlign: 'center',
-          marginBottom: 22,
-          lineHeight: 1.2,
-          letterSpacing: '-0.02em',
-          textShadow: '0 2px 20px rgba(0,180,220,0.20)',
-        }}>
-          Log In to Your Portal
-        </h1>
-
-        {/* Username / Email */}
-        <div style={{ marginBottom: 13 }}>
-          <label style={{
-            display: 'block', fontSize: 12.5,
-            color: 'rgba(200,225,255,0.70)',
-            marginBottom: 6, fontWeight: 500,
-          }}>
-            Username/Email
-          </label>
-          <input
-            type="text"
-            placeholder="Username/Email"
-            value={username}
-            onChange={e => setUsername(e.target.value)}
-            className="auth-input"
-            style={{
-              width: '100%', padding: '10px 14px',
-              borderRadius: 8, fontSize: 13.5,
-            }}
-          />
+    <div style={{ minHeight: '100vh', background: 'linear-gradient(145deg,#FFF8EF 0%,#FFF0DC 50%,#F5E8D6 100%)', display: 'flex', flexDirection: 'column' }}>
+      {/* Nav */}
+      <nav style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '22px 56px' }}>
+        <div className="landing-logo">OptiLearn</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 30 }}>
+          <a href="#features" style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-mid)', textDecoration: 'none' }}>Features</a>
+          <a href="#howitworks" style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-mid)', textDecoration: 'none' }}>How it Works</a>
+          <a href="#about" style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-mid)', textDecoration: 'none' }}>About</a>
         </div>
-
-        {/* Password */}
-        <div style={{ marginBottom: 5 }}>
-          <label style={{
-            display: 'block', fontSize: 12.5,
-            color: 'rgba(200,225,255,0.70)',
-            marginBottom: 6, fontWeight: 500,
-          }}>
-            Password
-          </label>
-          <div style={{ position: 'relative' }}>
-            <input
-              type={showPassword ? 'text' : 'password'}
-              placeholder="Password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              className="auth-input"
-              style={{
-                width: '100%', padding: '10px 42px 10px 14px',
-                borderRadius: 8, fontSize: 13.5,
-              }}
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              style={{
-                position: 'absolute', right: 12, top: '50%',
-                transform: 'translateY(-50%)',
-                background: 'none', border: 'none',
-                cursor: 'pointer', padding: 0,
-                display: 'flex', alignItems: 'center',
-              }}
-            >
-              {showPassword ? (
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-                  stroke="rgba(150,190,220,0.75)" strokeWidth="1.8">
-                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                  <circle cx="12" cy="12" r="3" />
-                </svg>
-              ) : (
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-                  stroke="rgba(150,190,220,0.75)" strokeWidth="1.8">
-                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
-                  <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
-                  <line x1="1" y1="1" x2="23" y2="23" />
-                </svg>
-              )}
-            </button>
-          </div>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <Link href="/login" className="btn-secondary btn-sm">Log in</Link>
+          <Link href="/login" className="btn-primary btn-sm">Get Started Free →</Link>
         </div>
+      </nav>
 
-        {/* Forgot Password */}
-        <div style={{ textAlign: 'right', marginBottom: 20 }}>
-          <a href="#" style={{
-            fontSize: 12.5,
-            color: 'rgba(0, 210, 240, 1)',
-            textDecoration: 'none', fontWeight: 500,
-            textShadow: '0 0 12px rgba(0,210,240,0.40)',
-          }}>
-            Forgot Password?
-          </a>
-        </div>
-
-        {/* Select Exam Target */}
-        <div style={{ marginBottom: 20 }}>
-          <p style={{
-            textAlign: 'center', fontSize: 14, fontWeight: 700,
-            color: 'rgba(230,245,255,0.92)',
-            marginBottom: 13, letterSpacing: '0.01em',
-          }}>
-            Select Your Exam Target
+      {/* Hero */}
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '60px 56px 40px', gap: 72, maxWidth: 1200, margin: '0 auto', width: '100%' }}>
+        {/* Left */}
+        <div style={{ flex: 1, maxWidth: 560, animation: 'slideUp .55s cubic-bezier(.22,.68,0,1.1) both' }}>
+          <div className="hero-eyebrow">✦ AI-Powered Study Intelligence</div>
+          <div className="hero-title">Study <em>Smarter.</em><br />Burn Out <em>Never.</em></div>
+          <p style={{ fontSize: '16.5px', color: 'var(--text-mid)', lineHeight: 1.7, marginBottom: 36, maxWidth: 460 }}>
+            OptiLearn tracks your study sessions, learns your focus patterns, and gives you personalised AI guidance — so you hit your goals without hitting a wall.
           </p>
-
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(4, 1fr)',
-            gap: 10,
-          }}>
-            {EXAM_TARGETS.map(({ id, label, Icon }) => (
-              <button
-                key={id}
-                onClick={() => setSelectedExam(id)}
-                className={`exam-card${selectedExam === id ? ' selected' : ''}`}
-                style={{
-                  border: 'none', cursor: 'pointer',
-                  borderRadius: 10,
-                  padding: '16px 6px 12px',
-                  display: 'flex', flexDirection: 'column',
-                  alignItems: 'center', justifyContent: 'center',
-                  gap: 8,
-                }}
-              >
-                <Icon selected={selectedExam === id} />
-                <span style={{
-                  fontSize: 11.5, fontWeight: 700,
-                  color: selectedExam === id
-                    ? 'rgba(0,230,250,1)'
-                    : 'rgba(190,215,235,0.80)',
-                  letterSpacing: '0.03em',
-                  textAlign: 'center', lineHeight: 1.2,
-                  textShadow: selectedExam === id
-                    ? '0 0 10px rgba(0,220,240,0.60)'
-                    : 'none',
-                }}>
-                  {label}
-                </span>
-              </button>
-            ))}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+            <Link href="/login" className="btn-primary" style={{ padding: '14px 32px', fontSize: 15 }}>Start for Free</Link>
+            <Link href="/login" className="btn-secondary" style={{ padding: '14px 24px', fontSize: 15 }}>View Demo →</Link>
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-soft)', marginTop: 16, display: 'flex', alignItems: 'center', gap: 5 }}>
+            ✓ No credit card &nbsp;·&nbsp; ✓ Works on all devices &nbsp;·&nbsp; ✓ Free forever plan
           </div>
         </div>
 
-        {/* LOG IN */}
-        <button
-          type="button"
-          className="login-btn"
-          style={{
-            width: '100%',
-            padding: '13px 0',
-            borderRadius: 50,
-            border: 'none',
-            cursor: 'pointer',
-            fontSize: 14,
-            fontWeight: 800,
-            color: '#ffffff',
-            marginBottom: 13,
-            textShadow: '0 1px 4px rgba(0,0,0,0.40)',
-          }}
-        >
-          LOG IN
-        </button>
-
-        {/* Create Account */}
-        <div style={{ textAlign: 'center', marginBottom: 15 }}>
-          <a href="#" style={{
-            fontSize: 13,
-            color: 'rgba(0,210,240,0.85)',
-            textDecoration: 'none', fontWeight: 500,
-            textShadow: '0 0 10px rgba(0,200,230,0.30)',
-          }}>
-            Create Account
-          </a>
+        {/* Right — mockup card */}
+        <div style={{ flex: '0 0 420px', position: 'relative', animation: 'slideUp .55s .12s cubic-bezier(.22,.68,0,1.1) both' }}>
+          <div style={{ background: 'linear-gradient(160deg,#FFFFFF 0%,#FFFBF6 100%)', borderRadius: 24, padding: 24, boxShadow: '0 4px 8px rgba(60,40,20,.06),0 16px 40px rgba(60,40,20,.12),0 40px 80px rgba(60,40,20,.10)', border: '1.5px solid var(--border)', overflow: 'hidden' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18, paddingBottom: 14, borderBottom: '1.5px solid var(--border)' }}>
+              <div style={{ display: 'flex', gap: 5 }}>
+                {['#FF5F57','#FFBD2E','#28C840'].map(c => <div key={c} style={{ width: 10, height: 10, borderRadius: '50%', background: c }} />)}
+              </div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-soft)' }}>OptiLearn Dashboard</div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+              {[['5.2h','Today\'s Study','var(--terra)'],['84%','Efficiency','var(--sage)'],['12🔥','Day Streak','var(--gold)'],['3','AI Insights','var(--indigo)']].map(([v,l,c]) => (
+                <div key={l} style={{ background: 'linear-gradient(145deg,#fff 0%,#FFF8F2 100%)', borderRadius: 14, padding: '12px 14px', border: '1.5px solid var(--border)', boxShadow: '0 2px 8px rgba(60,40,20,.06)' }}>
+                  <div style={{ fontFamily: "'Plus Jakarta Sans',sans-serif", fontSize: 20, fontWeight: 800, color: c }}>{v}</div>
+                  <div style={{ fontSize: 10, color: 'var(--text-soft)', marginTop: 2 }}>{l}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-soft)', marginBottom: 8, letterSpacing: '.4px' }}>SUBJECT PROGRESS</div>
+            {[['📐 Physics','68%','#4A5FA0,#7B8FCC',68],['➕ Maths','81%','var(--terra),#E89070',81],['⚗️ Chemistry','54%','var(--sage),#96C9A0',54]].map(([label,pct,grad,w]) => (
+              <div key={String(label)} style={{ marginBottom: 10 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 4 }}>
+                  <span style={{ fontWeight: 600, fontSize: 12 }}>{label}</span>
+                  <span style={{ color: 'var(--text-soft)', fontSize: 11 }}>{pct}</span>
+                </div>
+                <div style={{ height: 7, borderRadius: 999, background: 'var(--cream2)', overflow: 'hidden' }}>
+                  <div style={{ width: `${w}%`, height: '100%', borderRadius: 999, background: `linear-gradient(90deg,${grad})` }} />
+                </div>
+              </div>
+            ))}
+            <div style={{ background: 'linear-gradient(135deg,#3D4F8C,#243070)', borderRadius: 14, padding: '12px 14px', color: 'white' }}>
+              <div style={{ fontSize: 10, opacity: .6, letterSpacing: '1.5px', textTransform: 'uppercase', marginBottom: 4 }}>AI Insight · Live</div>
+              <div style={{ fontSize: '12.5px', fontWeight: 600, lineHeight: 1.4 }}>&quot;Physics peaks 9–11 AM. Schedule Mechanics tomorrow morning.&quot;</div>
+            </div>
+          </div>
+          {/* Floating badges */}
+          <div style={{ position: 'absolute', top: -18, right: -18, background: 'white', borderRadius: 14, padding: '10px 14px', boxShadow: '0 4px 20px rgba(60,40,20,.14)', border: '1.5px solid var(--border)', fontSize: 12, fontWeight: 600, animation: 'slideDown .5s .3s cubic-bezier(.22,.68,0,1.1) both' }}>🔥 12-day streak!</div>
+          <div style={{ position: 'absolute', bottom: -14, left: -18, background: 'white', borderRadius: 14, padding: '10px 14px', boxShadow: '0 4px 20px rgba(60,40,20,.14)', border: '1.5px solid var(--border)', fontSize: 12, fontWeight: 600, animation: 'slideUp .5s .4s cubic-bezier(.22,.68,0,1.1) both' }}>✅ Burnout risk: Low</div>
         </div>
-
-        {/* Social SSO */}
-        <div style={{ display: 'flex', justifyContent: 'center', gap: 10 }}>
-          <button type="button" className="social-btn" style={{
-            display: 'flex', alignItems: 'center', gap: 7,
-            padding: '7px 16px',
-            borderRadius: 50,
-            border: 'none', cursor: 'pointer',
-            fontSize: 12, color: 'rgba(200,220,240,0.80)',
-            fontWeight: 500,
-          }}>
-            {/* Google G */}
-            <svg width="15" height="15" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
-              <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
-              <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
-              <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
-            </svg>
-            Log In with
-          </button>
-
-          <button type="button" className="social-btn" style={{
-            display: 'flex', alignItems: 'center', gap: 7,
-            padding: '7px 16px',
-            borderRadius: 50,
-            border: 'none', cursor: 'pointer',
-            fontSize: 12, color: 'rgba(200,220,240,0.80)',
-            fontWeight: 500,
-          }}>
-            {/* Microsoft */}
-            <svg width="14" height="14" viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg">
-              <rect x="1" y="1" width="9" height="9" fill="#f25022" />
-              <rect x="11" y="1" width="9" height="9" fill="#7fba00" />
-              <rect x="1" y="11" width="9" height="9" fill="#00a4ef" />
-              <rect x="11" y="11" width="9" height="9" fill="#ffb900" />
-            </svg>
-            Google/Microsoft
-          </button>
-        </div>
-
-        {/* Bottom specular shine */}
-        <div style={{
-          position: 'absolute', bottom: 0, left: '20%', right: '20%', height: 1,
-          background: 'linear-gradient(90deg, transparent, rgba(0,150,200,0.20), transparent)',
-        }} />
       </div>
 
-      {/* Footer */}
-      <div style={{
-        position: 'fixed', bottom: 14, left: 0, right: 0,
-        textAlign: 'center', fontSize: 11.5,
-        color: 'rgba(160,200,230,0.30)',
-        zIndex: 5, letterSpacing: '0.04em',
-      }}>
-        OptiLearn © 2024
+      {/* Feature Strips */}
+      <div id="features" style={{ padding: '0 56px 48px', animation: 'fadeIn .7s .25s both' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'center', justifyItems: 'center' }}>
+          {[['📅','Smart Study Planner'],['🧠','AI Recommendations'],['📊','Deep Analytics'],['⚠️','Burnout Detection'],['🎯','Daily Goal Tracking'],['⏱️','Session Logging'],['🔥','Streak System']].map(([e,l]) => (
+            <div key={String(l)} className="feature-pill"><span style={{ fontSize: 16 }}>{e}</span>{l}</div>
+          ))}
+        </div>
       </div>
     </div>
-  );
+  )
 }

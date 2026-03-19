@@ -1,39 +1,70 @@
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
+import { NextResponse } from 'next/server'
+import { getServerSession } from '@/lib/supabase/server'
 
-export async function GET(_request: Request) {
-  const supabase = createRouteHandlerClient({ cookies })
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+import { SubjectsService } from '@/services/subjects.service'
 
-  const { data: subjects, error } = await supabase
-    .from('subjects')
-    .select('*')
-    .eq('user_id', user.id)
-    .order('created_at', { ascending: false })
+export async function GET() {
+  try {
+    const session = await getServerSession()
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
-  if (error) return Response.json({ error }, { status: 400 })
-  return Response.json({ subjects }, { status: 200 })
+    const subjects = await SubjectsService.getSubjects(session.user.id)
+
+    return NextResponse.json({ subjects }, { status: 200 })
+  } catch (error) {
+    if (error instanceof Error) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+    return NextResponse.json({ error: 'Unknown error' }, { status: 400 })
+  }
 }
 
 export async function POST(request: Request) {
-  const supabase = createRouteHandlerClient({ cookies })
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+  try {
+    const session = await getServerSession()
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
-  const body = await request.json()
-  const { subject_name, category } = body
+    const { subject_name, category } = await request.json()
 
-  const { data: subject, error } = await supabase
-    .from('subjects')
-    .insert({
-      user_id: user.id,
+    const subject = await SubjectsService.createSubject({
+      user_id: session.user.id,
       subject_name,
       category
     })
-    .select()
-    .single()
 
-  if (error) return Response.json({ error }, { status: 400 })
-  return Response.json({ subject }, { status: 201 })
+    return NextResponse.json({ subject }, { status: 201 })
+  } catch (error) {
+    if (error instanceof Error) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+    return NextResponse.json({ error: 'Unknown error' }, { status: 400 })
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const session = await getServerSession()
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { searchParams } = new URL(request.url)
+    const id = searchParams.get('id')
+    if (!id) {
+      return NextResponse.json({ error: 'Subject id required' }, { status: 400 })
+    }
+
+    await SubjectsService.deleteSubject(id, session.user.id)
+
+    return NextResponse.json({ success: true }, { status: 200 })
+  } catch (error) {
+    if (error instanceof Error) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+    return NextResponse.json({ error: 'Unknown error' }, { status: 400 })
+  }
 }

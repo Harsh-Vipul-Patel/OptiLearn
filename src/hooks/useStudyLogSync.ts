@@ -1,60 +1,40 @@
-import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabaseClient'
+import useSWR from 'swr'
 
+const fetcher = (url: string) => fetch(url).then(r => r.json())
+
+/**
+ * Polls study logs every 10s with SWR (auto-deduplication, background refresh, error retry).
+ * Returns logs + isLoading so components can show skeletons.
+ */
 export function useStudyLogSync(userId: string) {
-  const [logs, setLogs] = useState<Record<string, unknown>[]>([])
-
-  useEffect(() => {
-    if (!userId) return;
-
-    // 1. Initial fetch
-    supabase.from('study_logs')
-      .select('*').eq('user_id', userId).order('created_at', { ascending: false })
-      .then(({ data }) => setLogs(data ?? []))
-
-    // 2. Subscribe to updates
-    const channel = supabase
-      .channel('study-logs-changes')
-      .on('postgres_changes', {
-        event: 'UPDATE', schema: 'public', table: 'study_logs',
-        filter: `user_id=eq.${userId}`
-      }, (payload) => {
-        setLogs(prev => prev.map(log =>
-          log.id === payload.new.id ? payload.new : log
-        ))
-      })
-      .subscribe()
-
-    return () => { supabase.removeChannel(channel) }
-  }, [userId])
-
-  return logs
+  const { data, isLoading } = useSWR(
+    userId ? '/api/logs' : null,
+    fetcher,
+    {
+      refreshInterval: 10_000,
+      revalidateOnFocus: true,
+    }
+  )
+  return {
+    logs: (data?.logs ?? []) as Record<string, unknown>[],
+    isLoading,
+  }
 }
 
+/**
+ * Polls AI suggestions every 30s. Less frequent since suggestions change less often.
+ */
 export function useSuggestionsSync(userId: string) {
-  const [suggestions, setSuggestions] = useState<Record<string, unknown>[]>([])
-
-  useEffect(() => {
-    if (!userId) return;
-
-    // 1. Initial fetch
-    supabase.from('suggestions')
-      .select('*').eq('user_id', userId).order('created_at', { ascending: false })
-      .then(({ data }) => setSuggestions(data ?? []))
-
-    // 2. Subscribe to updates
-    const channel = supabase
-      .channel('suggestions-feed')
-      .on('postgres_changes', {
-        event: 'INSERT', schema: 'public', table: 'suggestions',
-        filter: `user_id=eq.${userId}`
-      }, (payload) => {
-        setSuggestions(prev => [payload.new, ...prev])  // prepend
-      })
-      .subscribe()
-
-    return () => { supabase.removeChannel(channel) }
-  }, [userId])
-
-  return suggestions
+  const { data, isLoading } = useSWR(
+    userId ? '/api/insights' : null,
+    fetcher,
+    {
+      refreshInterval: 30_000,
+      revalidateOnFocus: true,
+    }
+  )
+  return {
+    suggestions: (data?.suggestions ?? []) as Record<string, unknown>[],
+    isLoading,
+  }
 }

@@ -1,48 +1,79 @@
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
+import { NextResponse } from 'next/server'
+import { getServerSession } from '@/lib/supabase/server'
+import { TopicsService } from '@/services/topics.service'
+import { createClient } from '@/lib/supabase/server'
 
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const subjectId = params.id
-  const supabase = createRouteHandlerClient({ cookies })
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+  try {
+    const { id: subjectId } = await params
+    const session = await getServerSession()
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
-  // RLS ensures they can only view topics from subject they own
-  const { data: topics, error } = await supabase
-    .from('study_topics')
-    .select('*')
-    .eq('subject_id', subjectId)
-    .order('created_at', { ascending: false })
+    // Verify ownership of the subject
+    const supabase = await createClient()
+    const { data: subject } = await supabase
+      .from('subjects')
+      .select('*')
+      .eq('id', subjectId)
+      .single()
+      
+    if (!subject || subject.user_id !== session.user.id) {
+       return NextResponse.json({ error: 'Unauthorized or Subject not found' }, { status: 403 })
+    }
 
-  if (error) return Response.json({ error }, { status: 400 })
-  return Response.json({ topics }, { status: 200 })
+    const topics = await TopicsService.getTopicsBySubject(subjectId)
+
+    return NextResponse.json({ topics }, { status: 200 })
+  } catch (error) {
+    if (error instanceof Error) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+    return NextResponse.json({ error: 'Unknown error' }, { status: 400 })
+  }
 }
 
 export async function POST(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const subjectId = params.id
-  const supabase = createRouteHandlerClient({ cookies })
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+  try {
+    const { id: subjectId } = await params
+    const session = await getServerSession()
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
-  const body = await request.json()
-  const { topic_name, complexity } = body
+    // Verify ownership
+    const supabase = await createClient()
+    const { data: subject } = await supabase
+      .from('subjects')
+      .select('*')
+      .eq('id', subjectId)
+      .single()
+      
+    if (!subject || subject.user_id !== session.user.id) {
+       return NextResponse.json({ error: 'Unauthorized or Subject not found' }, { status: 403 })
+    }
 
-  const { data: topic, error } = await supabase
-    .from('study_topics')
-    .insert({
+    const body = await request.json()
+    const { topic_name, complexity } = body
+
+    const topic = await TopicsService.createTopic({
       subject_id: subjectId,
       topic_name,
       complexity
     })
-    .select()
-    .single()
 
-  if (error) return Response.json({ error }, { status: 400 })
-  return Response.json({ topic }, { status: 201 })
+    return NextResponse.json({ topic }, { status: 201 })
+  } catch (error) {
+    if (error instanceof Error) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+    return NextResponse.json({ error: 'Unknown error' }, { status: 400 })
+  }
 }

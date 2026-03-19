@@ -1,0 +1,35 @@
+'use client'
+
+import { useToast } from '@/components/ui/Toast'
+import Link from 'next/link'
+
+interface InsightCardProps {
+  text: string
+  burnoutRisk?: string
+  fatigue?: number
+}
+
+export function InsightCard({ text, burnoutRisk = 'Low', fatigue = 32 }: InsightCardProps) {
+  const { showToast } = useToast()
+
+  return (
+    <div className="insight-card">
+      <div className="insight-label">AI Insight · Live</div>
+      <div className="insight-text">&quot;{text}&quot;</div>
+      <div className="insight-actions">
+        <button
+          className="insight-btn insight-btn-primary"
+          onClick={() => showToast('Feedback recorded — insights will improve!')}
+        >
+          👍 Helpful
+        </button>
+        <Link href="/dashboard/insights" className="insight-btn insight-btn-ghost" style={{ textDecoration: 'none' }}>
+          See all →
+        </Link>
+      </div>
+      <div style={{ marginTop: 18, padding: '11px 13px', background: 'rgba(255,255,255,.1)', borderRadius: 'var(--r-sm)', fontSize: 12, opacity: .85, position: 'relative', zIndex: 1 }}>
+        ✅ Burnout risk: <strong>{burnoutRisk}</strong> · Fatigue {fatigue}/100 · Streak intact!
+      </div>
+    </div>
+  )
+}

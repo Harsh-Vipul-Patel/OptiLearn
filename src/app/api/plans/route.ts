@@ -1,46 +1,52 @@
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
+import { NextResponse } from 'next/server'
+import { getServerSession } from '@/lib/supabase/server'
+
+import { PlansService } from '@/services/plans.service'
 
 export async function GET(request: Request) {
-  const supabase = createRouteHandlerClient({ cookies })
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+  try {
+    const session = await getServerSession()
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
-  const { searchParams } = new URL(request.url)
-  const date = searchParams.get('date')
+    const { searchParams } = new URL(request.url)
+    const date = searchParams.get('date')
 
-  let query = supabase.from('daily_plans').select('*, study_topics(*)').eq('user_id', user.id)
-  
-  if (date) {
-    query = query.eq('plan_date', date)
+    const plans = await PlansService.getPlans(session.user.id, date)
+
+    return NextResponse.json({ plans }, { status: 200 })
+  } catch (error) {
+    if (error instanceof Error) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+    return NextResponse.json({ error: 'Unknown error' }, { status: 400 })
   }
-
-  const { data: plans, error } = await query.order('time_slot', { ascending: true })
-
-  if (error) return Response.json({ error }, { status: 400 })
-  return Response.json({ plans }, { status: 200 })
 }
 
 export async function POST(request: Request) {
-  const supabase = createRouteHandlerClient({ cookies })
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+  try {
+    const session = await getServerSession()
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
-  const body = await request.json()
-  const { topic_id, target_duration, time_slot, plan_date } = body
+    const body = await request.json()
+    const { topic_id, target_duration, time_slot, plan_date } = body
 
-  const { data: plan, error } = await supabase
-    .from('daily_plans')
-    .insert({
-      user_id: user.id,
+    const plan = await PlansService.createPlan({
+      user_id: session.user.id,
       topic_id,
       target_duration,
       time_slot,
       plan_date
     })
-    .select()
-    .single()
 
-  if (error) return Response.json({ error }, { status: 400 })
-  return Response.json({ plan }, { status: 201 })
+    return NextResponse.json({ plan }, { status: 201 })
+  } catch (error) {
+    if (error instanceof Error) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+    return NextResponse.json({ error: 'Unknown error' }, { status: 400 })
+  }
 }

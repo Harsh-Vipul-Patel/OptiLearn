@@ -1,16 +1,8 @@
-import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs'
-import { NextResponse, type NextRequest } from 'next/server'
+import { type NextRequest } from 'next/server'
+import { updateSession } from '@/lib/supabase/middleware'
 
-export async function middleware(req: NextRequest) {
-  const res = NextResponse.next()
-  const supabase = createMiddlewareClient({ req, res })
-  const { data: { session } } = await supabase.auth.getSession()
-  
-  if (!session) {
-    return NextResponse.redirect(new URL('/login', req.url))
-  }
-  
-  return res
+export async function middleware(request: NextRequest) {
+  return await updateSession(request)
 }
 
-export const config = { matcher: ['/dashboard/:path*', '/api/:path*'] }
+export const config = { matcher: ['/dashboard/:path*', '/api/((?!auth|webhooks).*)'] }
