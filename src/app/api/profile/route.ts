@@ -18,6 +18,11 @@ export async function GET() {
 
     if (error) throw error
 
+    // If public.users.name is blank, fall back to auth metadata (e.g. from signup form)
+    if (profile && !profile.name) {
+      profile.name = user.user_metadata?.name || user.user_metadata?.full_name || ''
+    }
+
     return NextResponse.json({ profile }, { status: 200 })
   } catch (error) {
     console.error('[profile/GET]', error)

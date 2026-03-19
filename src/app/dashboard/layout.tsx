@@ -4,9 +4,9 @@ import { ToastProvider } from '@/components/ui/Toast'
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <ToastProvider>
-      <div style={{ display: 'flex', minHeight: '100vh' }}>
+      <div className="dashboard-layout">
         <Sidebar />
-        <main style={{ flex: 1, overflowY: 'auto', padding: '34px 42px' }}>
+        <main className="main-content">
           {children}
         </main>
       </div>
