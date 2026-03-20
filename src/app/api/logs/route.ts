@@ -36,7 +36,7 @@ export async function POST(request: Request) {
       .from('users')
       .insert([{ 
         user_id: session.user.id,
-        name: session.user.user_metadata?.full_name || session.user.email || 'User'
+        name: session.user.name || session.user.email || 'User'
       }])
       .select()
       .single()

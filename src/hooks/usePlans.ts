@@ -3,17 +3,17 @@ import useSWR from 'swr'
 const fetcher = (url: string) => fetch(url).then(r => r.json())
 
 export interface PlanWithDetails {
-  id: string
+  plan_id: string
   plan_date: string
   time_slot: string | null
   target_duration: number
   studyTopic: {
-    id: string
+    topic_id: string
     topic_name: string
     subject: {
-      id: string
+      subject_id: string
       subject_name: string
-      category: string | null
+      subject_category: string | null
     }
   }
 }

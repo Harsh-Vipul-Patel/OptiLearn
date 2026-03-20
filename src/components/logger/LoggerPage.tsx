@@ -95,7 +95,7 @@ export function LoggerPage() {
                 >
                   <option value="">— Select a plan —</option>
                   {plans.map(p => (
-                    <option key={p.id} value={p.id}>
+                    <option key={p.plan_id} value={p.plan_id}>
                       {p.studyTopic?.subject?.subject_name ?? '?'} · {p.studyTopic?.topic_name ?? '?'} ({p.target_duration} min{p.time_slot ? ` @ ${p.time_slot}` : ''})
                     </option>
                   ))}

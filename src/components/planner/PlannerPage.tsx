@@ -55,8 +55,8 @@ export function PlannerPage() {
       .then(data => {
         if (data.subjects) {
           loadedSubjects = data.subjects.map((s: Record<string, unknown>, i: number) => ({
-            id: 's' + s.id,
-            dbId: String(s.id),
+            id: 's' + s.subject_id,
+            dbId: String(s.subject_id),
             name: String(s.subject_name),
             emoji: '📗',
             color: PALETTE[i % PALETTE.length],
@@ -71,9 +71,9 @@ export function PlannerPage() {
       .then(data => {
         if (data.plans) {
           const blocks = data.plans.map((p: any) => {
-            const subj = loadedSubjects.find(s => s.dbId === p.studyTopic?.subject?.id)
+            const subj = loadedSubjects.find(s => s.dbId === p.studyTopic?.subject?.subject_id)
             return {
-              id: 'b' + p.id,
+              id: 'b' + p.plan_id,
               sid: subj?.id || '',
               topic: p.studyTopic?.topic_name || '',
               time: p.time_slot || '09:00',
