@@ -18,13 +18,13 @@ type SidebarContextType = {
 }
 
 const SidebarContext = createContext<SidebarContextType>({
-  collapsed: false,
+  collapsed: true,
   toggleSidebar: () => {},
 })
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<SessionContextType["data"]>(null)
-  const [collapsed, setCollapsed] = useState(false)
+  const [collapsed, setCollapsed] = useState(true)
   const supabase = createClient()
   const router = useRouter()
 
@@ -32,6 +32,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const stored = localStorage.getItem("ol_sidebar_collapsed")
     if (stored === "true") setCollapsed(true)
+    if (stored === "false") setCollapsed(false)
   }, [])
 
   const toggleSidebar = () => {

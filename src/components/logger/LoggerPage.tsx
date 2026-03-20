@@ -72,7 +72,7 @@ export function LoggerPage() {
     <div>
       <div className="page-title">Log Study Session</div>
       <div className="page-sub">Honest data → better AI insights. Takes under 2 minutes.</div>
-      <div className="grid-2">
+      <div className="grid-2 logger-layout-grid">
         {/* Form */}
         <div className="card">
           <div className="section-title">Session Details</div>
@@ -103,7 +103,7 @@ export function LoggerPage() {
               )}
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 13 }}>
+            <div className="logger-time-grid" style={{ display: 'grid', gap: 13 }}>
               <div className="form-group">
                 <label className="form-label">Date</label>
                 <input className="form-input" type="date" value={logDate} onChange={e => setLogDate(e.target.value)} />
@@ -170,11 +170,11 @@ export function LoggerPage() {
               const analyzed = log.quality_score != null
               return (
                 <div key={i} className="log-item">
-                  <div style={{ minWidth: 50, textAlign: 'center' }}>
+                  <div className="logger-time-col" style={{ minWidth: 50, textAlign: 'center' }}>
                     <div className="log-time">{start.slice(0, 2)}</div>
                     <div className="log-ampm">{Number(start.slice(0, 2)) < 12 ? 'AM' : 'PM'}</div>
                   </div>
-                  <div style={{ flex: 1 }}>
+                  <div className="logger-content-col" style={{ flex: 1 }}>
                     <div className="log-title">{String(log.reflection || '—').slice(0, 60) || 'Study session'}</div>
                     <div className="log-detail">
                       Focus: {Number(log.focus_level)}/5

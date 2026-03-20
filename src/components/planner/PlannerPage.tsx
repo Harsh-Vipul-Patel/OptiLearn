@@ -337,7 +337,7 @@ export function PlannerPage() {
                 <input className="form-range" type="range" min="15" max="180" step="15" value={qaDur} onChange={e => setQaDur(Number(e.target.value))} />
                 <div className="range-labels"><span>15m</span><span>1h</span><span>3h</span></div>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <div className="planner-dual-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 <div className="form-group">
                   <label className="form-label">Difficulty</label>
                   <select className="form-select" value={qaDiff} onChange={e => setQaDiff(e.target.value)}>

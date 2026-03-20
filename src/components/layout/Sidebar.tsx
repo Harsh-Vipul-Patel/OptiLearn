@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useSession, signOut, useSidebar } from '@/components/Providers'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
@@ -28,6 +28,17 @@ export function Sidebar() {
   const { collapsed, toggleSidebar } = useSidebar()
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [isSmallScreen, setIsSmallScreen] = useState(false)
+
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 768px)')
+    const sync = () => setIsSmallScreen(media.matches)
+    sync()
+    media.addEventListener('change', sync)
+    return () => media.removeEventListener('change', sync)
+  }, [])
+
+  const effectiveCollapsed = collapsed && !isSmallScreen
 
   const name     = session?.user?.name  || 'Student'
   const email    = session?.user?.email || ''
@@ -37,18 +48,34 @@ export function Sidebar() {
 
   return (
     <>
-      {/* ── Hamburger (mobile only) ── */}
+      {/* ── Global sidebar toggle (all screens) ── */}
       <button
-        className="sidebar-hamburger"
-        onClick={() => setMobileOpen(o => !o)}
-        aria-label="Open navigation menu"
-      >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          {mobileOpen
-            ? <><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>
-            : <><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></>
+        className={`sidebar-global-toggle${effectiveCollapsed ? ' is-collapsed' : ''}${isSmallScreen ? ' is-mobile' : ''}${mobileOpen ? ' is-open' : ''}`}
+        onClick={() => {
+          if (isSmallScreen) {
+            setMobileOpen(o => !o)
+            return
           }
-        </svg>
+          toggleSidebar()
+        }}
+        aria-label={isSmallScreen ? (mobileOpen ? 'Close navigation menu' : 'Open navigation menu') : (effectiveCollapsed ? 'Expand sidebar' : 'Collapse sidebar')}
+      >
+        {isSmallScreen ? (
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            {mobileOpen
+              ? <><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>
+              : <><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></>
+            }
+          </svg>
+        ) : (
+          <svg
+            width="16" height="16" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" strokeWidth="2.5"
+            style={{ transform: effectiveCollapsed ? 'rotate(180deg)' : 'none', transition: 'transform .3s' }}
+          >
+            <polyline points="15 18 9 12 15 6"/>
+          </svg>
+        )}
       </button>
 
       {/* ── Mobile Backdrop ── */}
@@ -59,31 +86,31 @@ export function Sidebar() {
       />
 
       {/* ── Sidebar ── */}
-      <aside className={`sidebar${mobileOpen ? ' open' : ''}${collapsed ? ' collapsed' : ''}`}>
+      <aside className={`sidebar${mobileOpen ? ' open' : ''}${effectiveCollapsed ? ' collapsed' : ''}`}>
 
         {/* Logo */}
         <div className="logo">
           <div className="logo-mark">
-            {collapsed ? 'OL' : 'OptiLearn'}
+            {effectiveCollapsed ? 'OL' : 'OptiLearn'}
           </div>
-          {!collapsed && <div className="logo-sub">Study Intelligence</div>}
+          {!effectiveCollapsed && <div className="logo-sub">Study Intelligence</div>}
         </div>
 
         {/* Nav */}
         <nav className="nav">
           {NAV_ITEMS.map((group) => (
             <div key={group.section}>
-              {!collapsed && <span className="nav-section">{group.section}</span>}
+              {!effectiveCollapsed && <span className="nav-section">{group.section}</span>}
               {group.links.map((item) => (
                 <Link
                   key={item.href}
                   href={item.href}
                   className={`nav-item${pathname === item.href ? ' active' : ''}`}
                   onClick={close}
-                  title={collapsed ? item.label : undefined}
+                  title={effectiveCollapsed ? item.label : undefined}
                 >
                   <span className="nav-icon">{item.icon}</span>
-                  {!collapsed && <span className="nav-label">{item.label}</span>}
+                  {!effectiveCollapsed && <span className="nav-label">{item.label}</span>}
                 </Link>
               ))}
             </div>
@@ -91,7 +118,7 @@ export function Sidebar() {
         </nav>
 
         {/* User card */}
-        {collapsed ? (
+        {effectiveCollapsed ? (
           <Link href="/dashboard/profile" className="user-card-collapsed" onClick={close} title={name}>
             <div className="avatar">{initials}</div>
           </Link>
@@ -106,30 +133,15 @@ export function Sidebar() {
         )}
 
         {/* Logout */}
-        <button className="sidebar-logout" onClick={() => signOut()} title={collapsed ? 'Log out' : undefined}>
+        <button className="sidebar-logout" onClick={() => signOut()} title={effectiveCollapsed ? 'Log out' : undefined}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
             <polyline points="16 17 21 12 16 7"/>
             <line x1="21" y1="12" x2="9" y2="12"/>
           </svg>
-          {!collapsed && <span>Log out</span>}
+          {!effectiveCollapsed && <span>Log out</span>}
         </button>
 
-        {/* Desktop collapse toggle */}
-        <button
-          className="sidebar-collapse-btn"
-          onClick={toggleSidebar}
-          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-        >
-          <svg
-            width="16" height="16" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" strokeWidth="2.5"
-            style={{ transform: collapsed ? 'rotate(180deg)' : 'none', transition: 'transform .3s' }}
-          >
-            <polyline points="15 18 9 12 15 6"/>
-          </svg>
-        </button>
       </aside>
     </>
   )

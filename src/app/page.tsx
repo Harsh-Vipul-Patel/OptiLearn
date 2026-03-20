@@ -14,25 +14,25 @@ export default function LandingPage() {
   }, [session, router])
 
   return (
-    <div style={{ minHeight: '100vh', background: 'linear-gradient(145deg,#FFF8EF 0%,#FFF0DC 50%,#F5E8D6 100%)', display: 'flex', flexDirection: 'column' }}>
+    <div className="landing-root">
       {/* Nav */}
-      <nav style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '22px 56px' }}>
+      <nav className="landing-nav">
         <div className="landing-logo">OptiLearn</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 30 }}>
+        <div className="landing-nav-links">
           <a href="#features" style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-mid)', textDecoration: 'none' }}>Features</a>
           <a href="#howitworks" style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-mid)', textDecoration: 'none' }}>How it Works</a>
           <a href="#about" style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-mid)', textDecoration: 'none' }}>About</a>
         </div>
-        <div style={{ display: 'flex', gap: 10 }}>
+        <div className="landing-nav-cta">
           <Link href="/login" className="btn-secondary btn-sm">Log in</Link>
           <Link href="/login" className="btn-primary btn-sm">Get Started Free →</Link>
         </div>
       </nav>
 
       {/* Hero */}
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '60px 56px 40px', gap: 72, maxWidth: 1200, margin: '0 auto', width: '100%' }}>
+      <div className="landing-hero">
         {/* Left */}
-        <div style={{ flex: 1, maxWidth: 560, animation: 'slideUp .55s cubic-bezier(.22,.68,0,1.1) both' }}>
+        <div className="landing-copy" style={{ animation: 'slideUp .55s cubic-bezier(.22,.68,0,1.1) both' }}>
           <div className="hero-eyebrow">✦ AI-Powered Study Intelligence</div>
           <div className="hero-title">Study <em>Smarter.</em><br />Burn Out <em>Never.</em></div>
           <p style={{ fontSize: '16.5px', color: 'var(--text-mid)', lineHeight: 1.7, marginBottom: 36, maxWidth: 460 }}>
@@ -42,13 +42,13 @@ export default function LandingPage() {
             <Link href="/login" className="btn-primary" style={{ padding: '14px 32px', fontSize: 15 }}>Start for Free</Link>
             <Link href="/login" className="btn-secondary" style={{ padding: '14px 24px', fontSize: 15 }}>View Demo →</Link>
           </div>
-          <div style={{ fontSize: 12, color: 'var(--text-soft)', marginTop: 16, display: 'flex', alignItems: 'center', gap: 5 }}>
+          <div className="landing-proof">
             ✓ No credit card &nbsp;·&nbsp; ✓ Works on all devices &nbsp;·&nbsp; ✓ Free forever plan
           </div>
         </div>
 
         {/* Right — mockup card */}
-        <div style={{ flex: '0 0 420px', position: 'relative', animation: 'slideUp .55s .12s cubic-bezier(.22,.68,0,1.1) both' }}>
+        <div className="landing-mock-wrap" style={{ animation: 'slideUp .55s .12s cubic-bezier(.22,.68,0,1.1) both' }}>
           <div style={{ background: 'linear-gradient(160deg,#FFFFFF 0%,#FFFBF6 100%)', borderRadius: 24, padding: 24, boxShadow: '0 4px 8px rgba(60,40,20,.06),0 16px 40px rgba(60,40,20,.12),0 40px 80px rgba(60,40,20,.10)', border: '1.5px solid var(--border)', overflow: 'hidden' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18, paddingBottom: 14, borderBottom: '1.5px solid var(--border)' }}>
               <div style={{ display: 'flex', gap: 5 }}>
@@ -82,13 +82,13 @@ export default function LandingPage() {
             </div>
           </div>
           {/* Floating badges */}
-          <div style={{ position: 'absolute', top: -18, right: -18, background: 'white', borderRadius: 14, padding: '10px 14px', boxShadow: '0 4px 20px rgba(60,40,20,.14)', border: '1.5px solid var(--border)', fontSize: 12, fontWeight: 600, animation: 'slideDown .5s .3s cubic-bezier(.22,.68,0,1.1) both' }}>🔥 12-day streak!</div>
-          <div style={{ position: 'absolute', bottom: -14, left: -18, background: 'white', borderRadius: 14, padding: '10px 14px', boxShadow: '0 4px 20px rgba(60,40,20,.14)', border: '1.5px solid var(--border)', fontSize: 12, fontWeight: 600, animation: 'slideUp .5s .4s cubic-bezier(.22,.68,0,1.1) both' }}>✅ Burnout risk: Low</div>
+          <div className="landing-badge-top" style={{ animation: 'slideDown .5s .3s cubic-bezier(.22,.68,0,1.1) both' }}>🔥 12-day streak!</div>
+          <div className="landing-badge-bottom" style={{ animation: 'slideUp .5s .4s cubic-bezier(.22,.68,0,1.1) both' }}>✅ Burnout risk: Low</div>
         </div>
       </div>
 
       {/* Feature Strips */}
-      <div id="features" style={{ padding: '0 56px 48px', animation: 'fadeIn .7s .25s both' }}>
+      <div id="features" className="landing-features" style={{ animation: 'fadeIn .7s .25s both' }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'center', justifyItems: 'center' }}>
           {[['📅','Smart Study Planner'],['🧠','AI Recommendations'],['📊','Deep Analytics'],['⚠️','Burnout Detection'],['🎯','Daily Goal Tracking'],['⏱️','Session Logging'],['🔥','Streak System']].map(([e,l]) => (
             <div key={String(l)} className="feature-pill"><span style={{ fontSize: 16 }}>{e}</span>{l}</div>
