@@ -17,9 +17,9 @@ export async function GET(
     // Verify ownership of the subject
     const supabase = await createClient()
     const { data: subject } = await supabase
-      .from('subjects')
+      .from('subject')
       .select('*')
-      .eq('id', subjectId)
+      .eq('subject_id', subjectId)
       .single()
       
     if (!subject || subject.user_id !== session.user.id) {
@@ -51,9 +51,9 @@ export async function POST(
     // Verify ownership
     const supabase = await createClient()
     const { data: subject } = await supabase
-      .from('subjects')
+      .from('subject')
       .select('*')
-      .eq('id', subjectId)
+      .eq('subject_id', subjectId)
       .single()
       
     if (!subject || subject.user_id !== session.user.id) {

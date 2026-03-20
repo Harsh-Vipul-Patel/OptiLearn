@@ -99,13 +99,13 @@ export function PlannerPage() {
       const res = await fetch('/api/subjects', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subject_name: newName.trim(), category: newName.trim() }),
+        body: JSON.stringify({ subject_name: newName.trim() }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       const entry: Subject = {
-        id: 's' + data.subject.id,
-        dbId: data.subject.id,
+        id: 's' + data.subject.subject_id,
+        dbId: data.subject.subject_id,
         name: newName.trim(),
         emoji: newEmoji || '📗',
         color: selColor,

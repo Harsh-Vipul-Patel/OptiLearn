@@ -2,13 +2,10 @@ import { createClient } from '@/lib/supabase/server'
 
 export class LogsService {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  static async createLog(data: any, userId: string) {
+  static async createLog(data: any) {
     const { data: log, error } = await (await createClient())
-      .from('study_logs')
-      .insert([{
-        ...data,
-        user_id: userId
-      }])
+      .from('study_log')
+      .insert([data])
       .select()
       .single()
 
@@ -18,28 +15,40 @@ export class LogsService {
 
   static async getLogs(userId: string) {
     const { data, error } = await (await createClient())
-      .from('study_logs')
-      .select('*')
-      .eq('user_id', userId)
+      .from('study_log')
+      .select(`
+        *,
+        dailyPlan:daily_plan (
+          topic_id,
+          studyTopic:study_topic (
+            subject_id,
+            subject:subject (
+              user_id
+            )
+          )
+        )
+      `)
+      // Filter by user through relation chain
       .order('created_at', { ascending: false })
 
     if (error) throw new Error(error.message)
-    return data
+    // Filter in JS to ensure user_id ownership
+    return data?.filter((log: any) => log.dailyPlan?.studyTopic?.subject?.user_id === userId) || []
   }
 
   static async getPlanDetailsForAnalysis(planId: string) {
     const { data: plan, error } = await (await createClient())
-      .from('daily_plans')
+      .from('daily_plan')
       .select(`
         target_duration,
-        studyTopic:study_topics (
+        studyTopic:study_topic (
           complexity,
-          subject:subjects (
-            category
+          subject:subject (
+            subject_category
           )
         )
       `)
-      .eq('id', planId)
+      .eq('plan_id', planId)
       .single()
 
     if (error) throw new Error(error.message)

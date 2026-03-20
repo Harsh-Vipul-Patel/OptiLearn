@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/supabase/server'
+import { createClient, getServerSession } from '@/lib/supabase/server'
 
 import { PlansService } from '@/services/plans.service'
 
@@ -31,15 +31,31 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const supabase = await createClient()
+
+    // Ensure user exists in public.users table
+    const { error: userError } = await supabase
+      .from('users')
+      .insert([{ 
+        user_id: session.user.id,
+        name: session.user.user_metadata?.full_name || session.user.email || 'User'
+      }])
+      .select()
+      .single()
+
+    if (userError && !userError.message.includes('violates unique constraint')) {
+      console.error('[plans/POST - user creation]', userError)
+    }
+
     const body = await request.json()
-    const { topic_id, target_duration, time_slot, plan_date } = body
+    const { topic_id, target_duration, time_slot, plan_date, goal_type } = body
 
     const plan = await PlansService.createPlan({
-      user_id: session.user.id,
       topic_id,
       target_duration,
       time_slot,
-      plan_date
+      plan_date,
+      goal_type
     })
 
     return NextResponse.json({ plan }, { status: 201 })

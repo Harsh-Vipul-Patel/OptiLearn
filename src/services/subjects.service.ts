@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 export class SubjectsService {
   static async getSubjects(userId: string) {
     const { data, error } = await (await createClient())
-      .from('subjects')
+      .from('subject')
       .select('*')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
@@ -12,13 +12,13 @@ export class SubjectsService {
     return data
   }
 
-  static async createSubject(data: { user_id: string, subject_name: string, category?: string }) {
+  static async createSubject(data: { user_id: string, subject_name: string, subject_category?: string }) {
     const { data: subject, error } = await (await createClient())
-      .from('subjects')
+      .from('subject')
       .insert([{
         user_id: data.user_id,
         subject_name: data.subject_name,
-        category: data.category
+        subject_category: data.subject_category
       }])
       .select()
       .single()
@@ -27,11 +27,11 @@ export class SubjectsService {
     return subject
   }
 
-  static async deleteSubject(id: string, userId: string) {
+  static async deleteSubject(subjectId: string, userId: string) {
     const { data, error } = await (await createClient())
-      .from('subjects')
+      .from('subject')
       .delete()
-      .eq('id', id)
+      .eq('subject_id', subjectId)
       .eq('user_id', userId)
       
     if (error) throw new Error(error.message)

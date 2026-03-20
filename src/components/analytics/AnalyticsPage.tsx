@@ -85,7 +85,7 @@ export function AnalyticsPage() {
   // Subject parsing
   const subjMap: Record<string, number> = {}
   weekLogs.forEach((l: any) => {
-    const plan = plans.find(p => p.id === l.plan_id)
+    const plan = plans.find(p => p.plan_id === l.plan_id)
     if (plan && plan.studyTopic?.subject) {
       const subj = plan.studyTopic.subject.subject_name
       if (!subjMap[subj]) subjMap[subj] = 0

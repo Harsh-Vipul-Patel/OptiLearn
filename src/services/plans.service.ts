@@ -4,15 +4,15 @@ export class PlansService {
   static async getPlans(userId: string, date?: string | null) {
     const supabase = await createClient()
     let query = supabase
-      .from('daily_plans')
+      .from('daily_plan')
       .select(`
         *,
-        studyTopic:study_topics (
+        studyTopic:study_topic (
           *,
-          subject:subjects (*)
+          subject:subject (*)
         )
       `)
-      .eq('user_id', userId)
+      // Join through study_topic -> subject to filter by user_id
       .order('time_slot', { ascending: true })
 
     if (date) {
@@ -25,15 +25,15 @@ export class PlansService {
     return data
   }
 
-  static async createPlan(data: { user_id: string, topic_id: string, target_duration: number, time_slot?: string, plan_date: string }) {
+  static async createPlan(data: { topic_id: string, target_duration: number, time_slot?: string, plan_date: string, goal_type?: string }) {
     const { data: plan, error } = await (await createClient())
-      .from('daily_plans')
+      .from('daily_plan')
       .insert([{
-        user_id: data.user_id,
         topic_id: data.topic_id,
         target_duration: data.target_duration,
         time_slot: data.time_slot,
-        plan_date: data.plan_date
+        plan_date: data.plan_date,
+        goal_type: data.goal_type
       }])
       .select()
       .single()

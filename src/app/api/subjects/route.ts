@@ -10,7 +10,7 @@ export async function GET() {
 
     const supabase = await createClient()
     const { data, error } = await supabase
-      .from('subjects')
+      .from('subject')
       .select('*')
       .eq('user_id', session.user.id)
       .order('created_at', { ascending: false })
@@ -35,19 +35,34 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json()
-    const { subject_name, category } = body
+    const { subject_name, subject_category } = body
 
     if (!subject_name?.trim()) {
       return NextResponse.json({ error: 'subject_name is required' }, { status: 400 })
     }
 
     const supabase = await createClient()
+
+    // Ensure user exists in public.users table
+    const { error: userError } = await supabase
+      .from('users')
+      .insert([{ 
+        user_id: session.user.id,
+        name: session.user.user_metadata?.full_name || session.user.email || 'User'
+      }])
+      .select()
+      .single()
+
+    if (userError && !userError.message.includes('violates unique constraint')) {
+      console.error('[subjects/POST - user creation]', userError)
+    }
+
     const { data: subject, error } = await supabase
-      .from('subjects')
+      .from('subject')
       .insert([{
         user_id: session.user.id,
         subject_name: subject_name.trim(),
-        category: category?.trim() || null,
+        subject_category: subject_category?.trim() || null,
       }])
       .select()
       .single()
@@ -72,16 +87,16 @@ export async function DELETE(request: Request) {
     }
 
     const { searchParams } = new URL(request.url)
-    const id = searchParams.get('id')
-    if (!id) {
+    const subjectId = searchParams.get('id')
+    if (!subjectId) {
       return NextResponse.json({ error: 'subject id required' }, { status: 400 })
     }
 
     const supabase = await createClient()
     const { error } = await supabase
-      .from('subjects')
+      .from('subject')
       .delete()
-      .eq('id', id)
+      .eq('subject_id', subjectId)
       .eq('user_id', session.user.id)
 
     if (error) {

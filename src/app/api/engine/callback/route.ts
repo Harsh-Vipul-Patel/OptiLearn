@@ -33,28 +33,30 @@ export async function POST(request: Request) {
 
     const supabase = await createClient()
 
-    // ── 1. Write engine scores back to StudyLog ─────────────────────
-    const { error: logError } = await supabase
-      .from('study_logs')
-      .update({
+    // ── 1. Insert analysis into study_log_analysis ─────────────────────
+    const { data: analysis, error: analysisError } = await supabase
+      .from('study_log_analysis')
+      .insert([{
+        log_id,
+        user_id,
         efficiency:    efficiency    ?? null,
         throughput:    throughput    ?? null,
         quality_score: quality_score ?? null,
-        analyzed_at:   new Date().toISOString(),
-      })
-      .eq('id', log_id)
+      }])
+      .select()
+      .single()
 
-    if (logError) throw new Error(logError.message)
+    if (analysisError) throw new Error(analysisError.message)
 
     // ── 2. Insert AI suggestions ────────────────────────────────────
     if (Array.isArray(recommendations) && recommendations.length > 0) {
       const inserts = recommendations.map((text: string) => ({
         user_id,
-        log_id,
+        analysis_id: analysis.analysis_id,
         suggestion_text: text,
       }))
       const { error: sugError } = await supabase
-        .from('suggestions')
+        .from('suggestion')
         .insert(inserts)
 
       if (sugError) throw new Error(sugError.message)

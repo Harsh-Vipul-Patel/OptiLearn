@@ -9,8 +9,8 @@ import { NextResponse, type NextRequest } from 'next/server'
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
 
-  const supabaseUrl = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL!
-  const supabaseKey = process.env.SUPABASE_ANON_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  const supabaseUrl = process.env.SUPABASE_URL!
+  const supabaseKey = process.env.SUPABASE_ANON_KEY!
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const supabase = createServerClient(supabaseUrl, supabaseKey, {

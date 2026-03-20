@@ -26,7 +26,7 @@ export default function DashboardPage() {
   const TODAY_SLOTS = todayPlans
     .sort((a,b) => (a.time_slot || '').localeCompare(b.time_slot || ''))
     .map(p => {
-      const log = logs.find((l: any) => l.plan_id === p.id)
+      const log = logs.find((l: any) => l.plan_id === p.plan_id)
       let status: 'upcoming' | 'inprogress' | 'done' = 'upcoming'
       if (log) {
         status = (log as any).end_time ? 'done' : 'inprogress'
@@ -46,7 +46,7 @@ export default function DashboardPage() {
   
   const subjectAgg: Record<string, { durationMin: number }> = {}
   todayLogs.forEach((l: any) => {
-    const plan = plans.find(p => p.id === l.plan_id)
+    const plan = plans.find(p => p.plan_id === l.plan_id)
     if (plan && plan.studyTopic?.subject) {
       const subj = plan.studyTopic.subject.subject_name
       if (!subjectAgg[subj]) subjectAgg[subj] = { durationMin: 0 }
