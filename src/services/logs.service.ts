@@ -1,5 +1,15 @@
 import { createClient } from '@/lib/supabase/server'
 
+type LogWithOwnership = {
+  dailyPlan?: {
+    studyTopic?: {
+      subject?: {
+        user_id?: string
+      }
+    }
+  }
+}
+
 export class LogsService {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   static async createLog(data: any) {
@@ -33,7 +43,7 @@ export class LogsService {
 
     if (error) throw new Error(error.message)
     // Filter in JS to ensure user_id ownership
-    return data?.filter((log: any) => log.dailyPlan?.studyTopic?.subject?.user_id === userId) || []
+    return (data as LogWithOwnership[] | null)?.filter((log) => log.dailyPlan?.studyTopic?.subject?.user_id === userId) || []
   }
 
   static async getPlanDetailsForAnalysis(planId: string) {

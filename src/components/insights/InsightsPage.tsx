@@ -1,6 +1,6 @@
 'use client'
 
-import { useSession, signOut } from '@/components/Providers'
+import { useSession } from '@/components/Providers'
 import { useSuggestionsSync } from '@/hooks/useStudyLogSync'
 import { useToast } from '@/components/ui/Toast'
 import { Badge } from '@/components/ui/Badge'

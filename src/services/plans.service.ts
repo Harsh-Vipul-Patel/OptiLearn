@@ -12,7 +12,6 @@ export class PlansService {
           subject:subject (*)
         )
       `)
-      // Join through study_topic -> subject to filter by user_id
       .order('time_slot', { ascending: true })
 
     if (date) {
@@ -22,7 +21,7 @@ export class PlansService {
     const { data, error } = await query
 
     if (error) throw new Error(error.message)
-    return data
+    return data?.filter((plan) => plan.studyTopic?.subject?.user_id === userId) || []
   }
 
   static async createPlan(data: { topic_id: string, target_duration: number, time_slot?: string, plan_date: string, goal_type?: string }) {

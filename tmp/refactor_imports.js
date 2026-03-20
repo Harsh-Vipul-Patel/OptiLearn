@@ -1,5 +1,5 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
 const fs = require('fs');
-const glob = require('fs/promises');
 const path = require('path');
 
 function replaceInFile(filepath, regex, replacement) {

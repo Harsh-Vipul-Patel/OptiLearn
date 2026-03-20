@@ -6,11 +6,28 @@ import { useStudyLogSync } from '@/hooks/useStudyLogSync'
 import { usePlans } from '@/hooks/usePlans'
 
 const days = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
+const CHART_FONT = { family: 'Inter,sans-serif', size: 11.5 }
+
+type StudyLog = {
+  plan_id?: string
+  start_time?: string
+  end_time?: string | null
+  efficiency?: number
+  focus_level?: number
+}
+
+type ChartLike = {
+  destroy: () => void
+}
 
 export function AnalyticsPage() {
   const { data: session } = useSession()
   const { logs } = useStudyLogSync(session?.user?.id || '')
   const { plans } = usePlans()
+  const planVsActualRef = useRef<HTMLCanvasElement>(null)
+  const subjectEffRef = useRef<HTMLCanvasElement>(null)
+  const focusTimeRef = useRef<HTMLCanvasElement>(null)
+  const monthRef = useRef<HTMLCanvasElement>(null)
 
   const [tab, setTab] = useState<'week' | 'month'>('week')
   
@@ -21,18 +38,19 @@ export function AnalyticsPage() {
   const monthStart = new Date(now)
   monthStart.setDate(now.getDate() - 30)
 
-  const weekLogs = logs.filter((l: any) => new Date(l.start_time) >= weekStart)
-  const monthLogs = logs.filter((l: any) => new Date(l.start_time) >= monthStart)
+  const typedLogs = logs as StudyLog[]
+  const weekLogs = typedLogs.filter((l) => !!l.start_time && new Date(l.start_time) >= weekStart)
+  const monthLogs = typedLogs.filter((l) => !!l.start_time && new Date(l.start_time) >= monthStart)
 
-  const calculateStats = (filteredLogs: any[]) => {
+  const calculateStats = (filteredLogs: StudyLog[]) => {
     const totalMin = filteredLogs.reduce((acc, l) => {
-      const s = new Date(l.start_time).getTime()
+      const s = new Date(l.start_time || '').getTime()
       const e = l.end_time ? new Date(l.end_time).getTime() : new Date().getTime()
       return acc + (e - s) / 60000
     }, 0)
-    const effArr = filteredLogs.map((l: any) => l.efficiency).filter(Boolean)
-    const avgEff = effArr.length ? Math.round(effArr.reduce((a:number,b:number)=>a+b,0)/effArr.length) : 0
-    const focusArr = filteredLogs.map((l: any) => Number(l.focus_level)).filter(Boolean)
+    const effArr = filteredLogs.map((l) => Number(l.efficiency || 0)).filter(Boolean)
+    const avgEff = effArr.length ? Math.round(effArr.reduce((a,b)=>a+b,0)/effArr.length) : 0
+    const focusArr = filteredLogs.map((l) => Number(l.focus_level || 0)).filter(Boolean)
     const avgFocus = focusArr.length ? (focusArr.reduce((a:number,b:number)=>a+b,0)/focusArr.length).toFixed(1) : '0.0'
     return {
       totalHours: (totalMin / 60).toFixed(1) + 'h',
@@ -62,16 +80,31 @@ export function AnalyticsPage() {
   const weekLabels = Array.from({length:7}, (_,i) => {
     const d=new Date(); d.setDate(d.getDate() - (6-i)); return d.toLocaleDateString('en-US',{weekday:'short'})
   })
+  const weekDates = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date()
+    d.setDate(d.getDate() - (6 - i))
+    return d.toISOString().slice(0, 10)
+  })
+  const weekDateIndex = new Map(weekDates.map((date, idx) => [date, idx]))
+
+  const plannedData = Array(7).fill(0)
   const actualData = Array(7).fill(0)
   const focusData = Array(7).fill(0)
   const focusCounts = Array(7).fill(0)
 
-  weekLogs.forEach((l: any) => {
+  plans.forEach((p) => {
+    const idx = weekDateIndex.get(p.plan_date)
+    if (idx !== undefined) {
+      plannedData[idx] += Number(p.target_duration || 0) / 60
+    }
+  })
+
+  weekLogs.forEach((l) => {
     // 0 = today, 1 = yesterday, ... 6 = 6 days ago
-    const dayDist = Math.floor((now.getTime() - new Date(l.start_time).getTime()) / 86400000)
+    const dayDist = Math.floor((now.getTime() - new Date(l.start_time || '').getTime()) / 86400000)
     if (dayDist >= 0 && dayDist < 7) {
       const idx = 6 - dayDist
-      const s = new Date(l.start_time).getTime()
+      const s = new Date(l.start_time || '').getTime()
       const e = l.end_time ? new Date(l.end_time).getTime() : new Date().getTime()
       actualData[idx] += (e - s) / 3600000 // push hours
       
@@ -84,12 +117,12 @@ export function AnalyticsPage() {
 
   // Subject parsing
   const subjMap: Record<string, number> = {}
-  weekLogs.forEach((l: any) => {
+  weekLogs.forEach((l) => {
     const plan = plans.find(p => p.plan_id === l.plan_id)
     if (plan && plan.studyTopic?.subject) {
       const subj = plan.studyTopic.subject.subject_name
       if (!subjMap[subj]) subjMap[subj] = 0
-      const s = new Date(l.start_time).getTime()
+      const s = new Date(l.start_time || '').getTime()
       const e = l.end_time ? new Date(l.end_time).getTime() : new Date().getTime()
       subjMap[subj] += (e - s) / 3600000
     }
@@ -99,20 +132,32 @@ export function AnalyticsPage() {
 
   // Heatmap
   const heatData = Array.from({length: 4}, () => Array(7).fill(0))
-  monthLogs.forEach((l: any) => {
-    const d = new Date(l.start_time)
+  monthLogs.forEach((l) => {
+    const d = new Date(l.start_time || '')
     const dayDist = Math.floor((now.getTime() - d.getTime()) / 86400000)
     if (dayDist >= 0 && dayDist < 28) {
       const weekIdx = 3 - Math.floor(dayDist / 7)
       const rDay = d.getDay() // 0 is Sunday
       const dayIdx = rDay === 0 ? 6 : rDay - 1 // M=0, S=6
-      const s = new Date(l.start_time).getTime()
+      const s = new Date(l.start_time || '').getTime()
       const e = l.end_time ? new Date(l.end_time).getTime() : new Date().getTime()
       heatData[weekIdx][dayIdx] += (e - s) / 3600000
     }
   })
 
-  const charts = useCharts(tab, weekLabels, actualData, avgFocusData, subjectLabels, subjectData)
+  useCharts(
+    tab,
+    weekLabels,
+    plannedData,
+    actualData,
+    avgFocusData,
+    subjectLabels,
+    subjectData,
+    planVsActualRef,
+    subjectEffRef,
+    focusTimeRef,
+    monthRef
+  )
 
   return (
     <div>
@@ -135,18 +180,18 @@ export function AnalyticsPage() {
           </div>
           <div className="grid-2" style={{ marginBottom: 18 }}>
             <div className="card">
-              <div className="section-title">Actual Hours</div>
-              <div className="chart-wrap"><canvas ref={charts.planVsActualRef} /></div>
+              <div className="section-title">Planned vs Actual Hours</div>
+              <div className="chart-wrap"><canvas ref={planVsActualRef} /></div>
             </div>
             <div className="card">
               <div className="section-title">Hours by Subject</div>
-              <div className="chart-wrap"><canvas ref={charts.subjectEffRef} /></div>
+              <div className="chart-wrap"><canvas ref={subjectEffRef} /></div>
             </div>
           </div>
           <div className="grid-2">
             <div className="card">
               <div className="section-title">Focus by Day</div>
-              <div className="chart-wrap" style={{ height: 195 }}><canvas ref={charts.focusTimeRef} /></div>
+              <div className="chart-wrap" style={{ height: 195 }}><canvas ref={focusTimeRef} /></div>
             </div>
             <div className="card">
               <div className="section-title">Activity Heatmap</div>
@@ -179,7 +224,7 @@ export function AnalyticsPage() {
           </div>
           <div className="card">
             <div className="section-title">Monthly Subject Breakdown</div>
-            <div className="chart-wrap" style={{ height: 240 }}><canvas ref={charts.monthRef} /></div>
+            <div className="chart-wrap" style={{ height: 240 }}><canvas ref={monthRef} /></div>
           </div>
         </div>
       )}
@@ -191,21 +236,19 @@ export function AnalyticsPage() {
 function useCharts(
   tab: 'week' | 'month', 
   weekLabels: string[], 
+  plannedData: number[],
   actualData: number[], 
   avgFocusData: number[], 
   subjectLabels: string[], 
-  subjectData: number[]
+  subjectData: number[],
+  planVsActualRef: React.RefObject<HTMLCanvasElement | null>,
+  subjectEffRef: React.RefObject<HTMLCanvasElement | null>,
+  focusTimeRef: React.RefObject<HTMLCanvasElement | null>,
+  monthRef: React.RefObject<HTMLCanvasElement | null>
 ) {
-  const planVsActualRef = useRef<HTMLCanvasElement>(null)
-  const subjectEffRef   = useRef<HTMLCanvasElement>(null)
-  const focusTimeRef    = useRef<HTMLCanvasElement>(null)
-  const monthRef        = useRef<HTMLCanvasElement>(null)
-
-  const font = { family: 'Inter,sans-serif', size: 11.5 }
-
   useEffect(() => {
-    let weekCharts: any[] = []
-    let monthChart: any = null
+    const weekCharts: ChartLike[] = []
+    let monthChart: ChartLike | null = null
 
     const buildWeek = () => {
       if (tab !== 'week') return
@@ -214,16 +257,48 @@ function useCharts(
       if (!Chart) return
 
       if (planVsActualRef.current) {
-        weekCharts.push(new Chart(planVsActualRef.current, { type: 'bar', data: { labels: weekLabels, datasets: [{ label: 'Actual', data: actualData, backgroundColor: 'rgba(107,155,122,.25)', borderColor: '#6B9B7A', borderWidth: 2, borderRadius: 6 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top', labels: { font, boxWidth: 9, boxHeight: 9, padding: 12 } } }, scales: { x: { ticks: { font }, grid: { display: false } }, y: { ticks: { font, callback: (v: number) => v+'h' }, grid: { color: 'rgba(100,80,50,.06)' }, beginAtZero: true } } } }))
+        weekCharts.push(new Chart(planVsActualRef.current, {
+          type: 'bar',
+          data: {
+            labels: weekLabels,
+            datasets: [
+              {
+                label: 'Planned',
+                data: plannedData,
+                backgroundColor: 'rgba(61,79,140,.18)',
+                borderColor: '#3D4F8C',
+                borderWidth: 1.5,
+                borderRadius: 6,
+              },
+              {
+                label: 'Actual',
+                data: actualData,
+                backgroundColor: 'rgba(107,155,122,.25)',
+                borderColor: '#6B9B7A',
+                borderWidth: 2,
+                borderRadius: 6,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { position: 'top', labels: { font: CHART_FONT, boxWidth: 9, boxHeight: 9, padding: 12 } } },
+            scales: {
+              x: { ticks: { font: CHART_FONT }, grid: { display: false } },
+              y: { ticks: { font: CHART_FONT, callback: (v: number) => v+'h' }, grid: { color: 'rgba(100,80,50,.06)' }, beginAtZero: true },
+            },
+          },
+        }))
       }
 
       if (subjectEffRef.current) {
         const bg = ['#4A5FA0','#C96B3A','#6B9B7A','#D4A843','#B85C7A']
-        weekCharts.push(new Chart(subjectEffRef.current, { type: 'doughnut', data: { labels: subjectLabels, datasets: [{ data: subjectData, backgroundColor: bg.slice(0, subjectLabels.length), borderWidth: 0, hoverOffset: 7 }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '65%', plugins: { legend: { position: 'right', labels: { font, boxWidth: 9, boxHeight: 9, padding: 12 } } } } }))
+        weekCharts.push(new Chart(subjectEffRef.current, { type: 'doughnut', data: { labels: subjectLabels, datasets: [{ data: subjectData, backgroundColor: bg.slice(0, subjectLabels.length), borderWidth: 0, hoverOffset: 7 }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '65%', plugins: { legend: { position: 'right', labels: { font: CHART_FONT, boxWidth: 9, boxHeight: 9, padding: 12 } } } } }))
       }
 
       if (focusTimeRef.current) {
-        weekCharts.push(new Chart(focusTimeRef.current, { type: 'line', data: { labels: weekLabels, datasets: [{ label: 'Avg Focus', data: avgFocusData, borderColor: '#D4A843', backgroundColor: 'rgba(212,168,67,.12)', tension: .4, fill: true, pointBackgroundColor: '#D4A843', pointRadius: 4 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { font }, grid: { display: false } }, y: { min: 0, max: 5, ticks: { font, stepSize: 1 }, grid: { color: 'rgba(100,80,50,.06)' } } } } }))
+        weekCharts.push(new Chart(focusTimeRef.current, { type: 'line', data: { labels: weekLabels, datasets: [{ label: 'Avg Focus', data: avgFocusData, borderColor: '#D4A843', backgroundColor: 'rgba(212,168,67,.12)', tension: .4, fill: true, pointBackgroundColor: '#D4A843', pointRadius: 4 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { font: CHART_FONT }, grid: { display: false } }, y: { min: 0, max: 5, ticks: { font: CHART_FONT, stepSize: 1 }, grid: { color: 'rgba(100,80,50,.06)' } } } } }))
       }
     }
 
@@ -234,7 +309,7 @@ function useCharts(
       if (!Chart) return
       
       if (monthRef.current) {
-         monthChart = new Chart(monthRef.current, { type: 'bar', data: { labels: weekLabels, datasets: [{ label: 'Monthly Hours Aggregate Placeholder', data: actualData, borderColor: '#4A5FA0', backgroundColor: 'rgba(74,95,160,.6)', borderWidth: 1, borderRadius: 4 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top', labels: { font, boxWidth: 9, boxHeight: 9, padding: 12 } } }, scales: { x: { ticks: { font }, grid: { display: false } }, y: { ticks: { font, callback: (v: number) => v+'h' }, grid: { color: 'rgba(100,80,50,.06)' }, beginAtZero: true } } } })
+        monthChart = new Chart(monthRef.current, { type: 'bar', data: { labels: weekLabels, datasets: [{ label: 'Monthly Hours Aggregate Placeholder', data: actualData, borderColor: '#4A5FA0', backgroundColor: 'rgba(74,95,160,.6)', borderWidth: 1, borderRadius: 4 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top', labels: { font: CHART_FONT, boxWidth: 9, boxHeight: 9, padding: 12 } } }, scales: { x: { ticks: { font: CHART_FONT }, grid: { display: false } }, y: { ticks: { font: CHART_FONT, callback: (v: number) => v+'h' }, grid: { color: 'rgba(100,80,50,.06)' }, beginAtZero: true } } } })
       }
     }
 
@@ -253,7 +328,5 @@ function useCharts(
       weekCharts.forEach(c => c.destroy())
       if (monthChart) monthChart.destroy()
     }
-  }, [tab, weekLabels, actualData, avgFocusData, subjectLabels, subjectData]) // Update when live data loads
-
-  return { planVsActualRef, subjectEffRef, focusTimeRef, monthRef }
+  }, [tab, weekLabels, plannedData, actualData, avgFocusData, subjectLabels, subjectData, planVsActualRef, subjectEffRef, focusTimeRef, monthRef]) // Update when live data loads
 }

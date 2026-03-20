@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import { useToast } from '@/components/ui/Toast'
 import { useSuggestionsSync } from '@/hooks/useStudyLogSync'
-import { useSession, signOut } from '@/components/Providers'
+import { useSession } from '@/components/Providers'
 import Link from 'next/link'
 
 /* ── Types ── */
@@ -21,6 +21,13 @@ const PALETTE: SubjectColor[] = [
 
 const HOURS = ['07:00','08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00']
 const HLBL: Record<string, string> = { '07:00':'7 AM','08:00':'8 AM','09:00':'9 AM','10:00':'10 AM','11:00':'11 AM','12:00':'12 PM','13:00':'1 PM','14:00':'2 PM','15:00':'3 PM','16:00':'4 PM','17:00':'5 PM','18:00':'6 PM','19:00':'7 PM','20:00':'8 PM' }
+
+const SLOT_TO_HOUR: Record<string, string> = {
+  Morning: '09:00',
+  Afternoon: '14:00',
+  Evening: '18:00',
+  Night: '20:00',
+}
 
 const today = new Date().toISOString().slice(0, 10)
 
@@ -70,15 +77,17 @@ export function PlannerPage() {
       .then(r => r.json())
       .then(data => {
         if (data.plans) {
-          const blocks = data.plans.map((p: any) => {
-            const subj = loadedSubjects.find(s => s.dbId === p.studyTopic?.subject?.subject_id)
+          const blocks = (data.plans as Record<string, unknown>[]).map((p) => {
+            const studyTopic = p.studyTopic as Record<string, unknown> | undefined
+            const subject = studyTopic?.subject as Record<string, unknown> | undefined
+            const subj = loadedSubjects.find(s => s.dbId === String(subject?.subject_id || ''))
             return {
-              id: 'b' + p.plan_id,
+              id: 'b' + String(p.plan_id),
               sid: subj?.id || '',
-              topic: p.studyTopic?.topic_name || '',
-              time: p.time_slot || '09:00',
-              dur: p.target_duration,
-              diff: p.studyTopic?.complexity || 'Medium',
+              topic: String(studyTopic?.topic_name || ''),
+              time: SLOT_TO_HOUR[String(p.time_slot || '')] || String(p.time_slot || '09:00'),
+              dur: Number(p.target_duration || 0),
+              diff: String(studyTopic?.complexity || 'Medium'),
               goal: 'Learn'
             }
           })
@@ -173,16 +182,33 @@ export function PlannerPage() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              topic_id: subj.dbId,      // uses subject id as fallback until topics are added
+              topic_id: subj.dbId,      // API resolves subject-id fallback to a real topic id
               target_duration: block.dur,
               time_slot: block.time,
               plan_date: today,
             }),
           })
+            .then(async (res) => {
+              const payload = await res.json().catch(() => null)
+              if (!res.ok) {
+                throw new Error(payload?.error || `Request failed (${res.status})`)
+              }
+              return payload
+            })
         })
       )
       const saved = results.filter(r => r.status === 'fulfilled').length
-      showToast(`Plan saved! ${saved}/${planBlocks.length} blocks saved ✦`)
+      if (saved === planBlocks.length) {
+        showToast(`Plan saved! ${saved}/${planBlocks.length} blocks saved ✦`)
+      } else {
+        const firstFailure = results.find(
+          (r): r is PromiseRejectedResult => r.status === 'rejected'
+        )
+        const reason = firstFailure?.reason instanceof Error
+          ? firstFailure.reason.message
+          : String(firstFailure?.reason || 'Unknown error')
+        showToast(`Plan saved! ${saved}/${planBlocks.length} blocks saved. ${reason}`, '⚠️')
+      }
     } catch (e) {
       showToast('Failed to save plan', '⚠️')
       console.error(e)

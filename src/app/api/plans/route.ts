@@ -3,6 +3,23 @@ import { createClient, getServerSession } from '@/lib/supabase/server'
 
 import { PlansService } from '@/services/plans.service'
 
+function normalizeTimeSlot(value?: string | null) {
+  if (!value) return null
+
+  const normalized = value.toLowerCase()
+  if (normalized === 'morning' || normalized === 'afternoon' || normalized === 'evening' || normalized === 'night') {
+    return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase()
+  }
+
+  // Convert planner timeline hour (HH:MM) into enum expected by DB.
+  const hour = Number(value.split(':')[0])
+  if (!Number.isFinite(hour)) return null
+  if (hour >= 5 && hour < 12) return 'Morning'
+  if (hour >= 12 && hour < 17) return 'Afternoon'
+  if (hour >= 17 && hour < 22) return 'Evening'
+  return 'Night'
+}
+
 export async function GET(request: Request) {
   try {
     const session = await getServerSession()
@@ -33,27 +50,73 @@ export async function POST(request: Request) {
 
     const supabase = await createClient()
 
-    // Ensure user exists in public.users table
-    const { error: userError } = await supabase
-      .from('users')
-      .insert([{ 
-        user_id: session.user.id,
-        name: session.user.name || session.user.email || 'User'
-      }])
-      .select()
-      .single()
-
-    if (userError && !userError.message.includes('violates unique constraint')) {
-      console.error('[plans/POST - user creation]', userError)
-    }
-
     const body = await request.json()
     const { topic_id, target_duration, time_slot, plan_date, goal_type } = body
 
+    if (!topic_id || !target_duration || !plan_date) {
+      return NextResponse.json({ error: 'topic_id, target_duration and plan_date are required' }, { status: 400 })
+    }
+
+    let resolvedTopicId = topic_id as string
+
+    // Planner quick-add can send a subject id in topic_id.
+    // If so, resolve or create a default topic for that subject.
+    const { data: subjectFallback, error: subjectLookupError } = await supabase
+      .from('subject')
+      .select('subject_id, user_id')
+      .eq('subject_id', topic_id)
+      .maybeSingle()
+
+    if (subjectLookupError && subjectLookupError.code !== 'PGRST116') {
+      throw new Error(subjectLookupError.message)
+    }
+
+    if (subjectFallback) {
+      if (subjectFallback.user_id !== session.user.id) {
+        return NextResponse.json({ error: 'Invalid subject ownership' }, { status: 403 })
+      }
+
+      const { data: existingTopic, error: existingTopicError } = await supabase
+        .from('study_topic')
+        .select('topic_id')
+        .eq('subject_id', subjectFallback.subject_id)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle()
+
+      if (existingTopicError && existingTopicError.code !== 'PGRST116') {
+        throw new Error(existingTopicError.message)
+      }
+
+      if (existingTopic?.topic_id) {
+        resolvedTopicId = existingTopic.topic_id
+      } else {
+        const { data: createdTopic, error: createTopicError } = await supabase
+          .from('study_topic')
+          .insert([
+            {
+              subject_id: subjectFallback.subject_id,
+              topic_name: 'General Study',
+              complexity: 'Medium',
+            },
+          ])
+          .select('topic_id')
+          .single()
+
+        if (createTopicError) {
+          throw new Error(createTopicError.message)
+        }
+
+        resolvedTopicId = createdTopic.topic_id
+      }
+    }
+
+    const normalizedTimeSlot = normalizeTimeSlot(time_slot)
+
     const plan = await PlansService.createPlan({
-      topic_id,
+      topic_id: resolvedTopicId,
       target_duration,
-      time_slot,
+      time_slot: normalizedTimeSlot || undefined,
       plan_date,
       goal_type
     })

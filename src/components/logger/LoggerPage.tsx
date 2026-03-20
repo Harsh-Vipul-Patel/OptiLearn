@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useSession, signOut } from '@/components/Providers'
+import { useSession } from '@/components/Providers'
 import { useStudyLogSync } from '@/hooks/useStudyLogSync'
 import { usePlans } from '@/hooks/usePlans'
 import { useToast } from '@/components/ui/Toast'
@@ -13,9 +13,10 @@ export function LoggerPage() {
   const { data: session } = useSession()
   const { showToast } = useToast()
   const { logs, isLoading: logsLoading } = useStudyLogSync(session?.user?.id || '')
-  const { plans, isLoading: plansLoading } = usePlans()
-
   const today = new Date().toISOString().slice(0, 10)
+  const { plans, isLoading: plansLoading } = usePlans(today)
+
+
 
   const [selectedPlanId, setSelectedPlanId] = useState('')
   const [logDate, setLogDate] = useState(today)

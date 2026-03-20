@@ -12,7 +12,6 @@ export async function updateSession(request: NextRequest) {
   const supabaseUrl = process.env.SUPABASE_URL!
   const supabaseKey = process.env.SUPABASE_ANON_KEY!
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const supabase = createServerClient(supabaseUrl, supabaseKey, {
     cookies: {
       getAll() {

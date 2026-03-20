@@ -9,16 +9,32 @@ import { InsightCard } from '@/components/dashboard/InsightCard'
 import { TodayPlanCard } from '@/components/dashboard/TodayPlanCard'
 import { BurnoutMonitor } from '@/components/dashboard/BurnoutMonitor'
 
+type StudyLog = {
+  plan_id?: string
+  start_time?: string
+  end_time?: string | null
+  efficiency?: number
+}
+
+type Suggestion = {
+  created_at?: string
+  content?: string
+  text?: string
+}
+
 export default function DashboardPage() {
   const { data: session } = useSession()
   const { logs }        = useStudyLogSync(session?.user?.id || '')
   const { suggestions } = useSuggestionsSync(session?.user?.id || '')
-  const { plans }       = usePlans()
-
+  const typedLogs = logs as StudyLog[]
+  const typedSuggestions = suggestions as Suggestion[]
   const todayDate = new Date().toISOString().slice(0, 10)
+  const { plans }       = usePlans(todayDate)
+
+
 
   /* ── 1. Calculate Active Insights ── */
-  const insightText = (suggestions[0] as Record<string,unknown>)?.content as string | undefined
+  const insightText = typedSuggestions[0]?.content
     ?? 'No new AI insights yet. Keep logging your sessions to give the engine more data!'
 
   /* ── 2. Calculate Today's Plans ── */
@@ -26,10 +42,10 @@ export default function DashboardPage() {
   const TODAY_SLOTS = todayPlans
     .sort((a,b) => (a.time_slot || '').localeCompare(b.time_slot || ''))
     .map(p => {
-      const log = logs.find((l: any) => l.plan_id === p.plan_id)
+      const log = typedLogs.find((l) => l.plan_id === p.plan_id)
       let status: 'upcoming' | 'inprogress' | 'done' = 'upcoming'
       if (log) {
-        status = (log as any).end_time ? 'done' : 'inprogress'
+        status = log.end_time ? 'done' : 'inprogress'
       }
       return {
         time: p.time_slot || 'Anytime',
@@ -37,15 +53,17 @@ export default function DashboardPage() {
         topic: p.studyTopic?.topic_name || 'Topic',
         duration: p.target_duration,
         status,
-        difficulty: (p.studyTopic as any)?.complexity || 'Medium',
+        difficulty: p.studyTopic?.complexity || 'Medium',
       }
     })
 
   /* ── 3. Calculate Aggregates from Logs ── */
-  const todayLogs = logs.filter((l: any) => String(l.start_time).startsWith(todayDate))
+  const todayLogs = typedLogs.filter((l) => String(l.start_time).startsWith(todayDate))
   
   const subjectAgg: Record<string, { durationMin: number }> = {}
-  todayLogs.forEach((l: any) => {
+  todayLogs.forEach((l) => {
+    if (!l.start_time) return
+
     const plan = plans.find(p => p.plan_id === l.plan_id)
     if (plan && plan.studyTopic?.subject) {
       const subj = plan.studyTopic.subject.subject_name
@@ -71,12 +89,12 @@ export default function DashboardPage() {
     pct: totalMinToday > 0 ? Math.round((data.durationMin / totalMinToday) * 100) : 0
   }))
 
-  const effArr = todayLogs.map((l: any) => l.efficiency).filter(Boolean)
+  const effArr = todayLogs.map((l) => Number(l.efficiency || 0)).filter(Boolean)
   const avgEff = effArr.length > 0 ? Math.round(effArr.reduce((a:number,b:number)=>a+b,0)/effArr.length) + '%' : 'N/A'
 
   /* ── 4. Calculate Streak ── */
   let streak = 0
-  const uniqueDates = Array.from(new Set(logs.map((l: any) => String(l.start_time).slice(0,10)))).sort((a,b)=>b.localeCompare(a))
+  const uniqueDates = Array.from(new Set(typedLogs.map((l) => String(l.start_time).slice(0,10)))).sort((a,b)=>b.localeCompare(a))
   const d = new Date()
   for (let i = 0; i < uniqueDates.length; i++) {
     const dateStr = d.toISOString().slice(0,10)
@@ -102,7 +120,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <StatsRow hoursToday={hoursToday} efficiency={avgEff} streak={streak} insightsToday={suggestions.filter((s:any) => String(s.created_at).startsWith(todayDate)).length} />
+      <StatsRow hoursToday={hoursToday} efficiency={avgEff} streak={streak} insightsToday={typedSuggestions.filter((s) => String(s.created_at).startsWith(todayDate)).length} />
 
       <div className="dashboard-top-grid">
         <InsightCard text={insightText} burnoutRisk="Low" fatigue={Math.round(totalMinToday / 4)} />

@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useSession, signOut } from '@/components/Providers'
+import { useSession } from '@/components/Providers'
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 
