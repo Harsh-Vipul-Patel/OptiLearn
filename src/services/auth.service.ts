@@ -1,11 +1,12 @@
 import { createClient } from '@/lib/supabase/server'
-import bcrypt from 'bcryptjs'
 
 export class AuthService {
   static async registerUser(data: { email: string, password: string, name?: string, exam_type?: string, preferred_time?: string }) {
-    const { data: existingUser } = await (await createClient())
+    const supabase = await createClient()
+
+    const { data: existingUser } = await supabase
       .from('users')
-      .select('id')
+      .select('user_id')
       .eq('email', data.email)
       .single()
 
@@ -13,17 +14,34 @@ export class AuthService {
       throw new Error('User already exists')
     }
 
-    const hashedPassword = await bcrypt.hash(data.password, 10)
+    const { data: authSignUp, error: signUpError } = await supabase.auth.signUp({
+      email: data.email,
+      password: data.password,
+      options: {
+        data: {
+          name: data.name || data.email,
+        },
+      },
+    })
 
-    const { data: user, error } = await (await createClient())
+    if (signUpError) throw new Error(signUpError.message)
+    const authUserId = authSignUp.user?.id
+    if (!authUserId) {
+      throw new Error('Auth user was not created')
+    }
+
+    const { data: user, error } = await supabase
       .from('users')
-      .insert([{
-        email: data.email,
-        password: hashedPassword,
-        name: data.name,
-        exam_type: data.exam_type,
-        preferred_time: data.preferred_time
-      }])
+      .upsert(
+        [{
+          user_id: authUserId,
+          email: data.email,
+          name: data.name || data.email,
+          exam_type: data.exam_type,
+          preferred_study_time: data.preferred_time,
+        }],
+        { onConflict: 'user_id' }
+      )
       .select()
       .single()
 

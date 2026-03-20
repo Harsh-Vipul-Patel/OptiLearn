@@ -24,13 +24,16 @@ const SidebarContext = createContext<SidebarContextType>({
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<SessionContextType["data"]>(null)
-  const [collapsed, setCollapsed] = useState(() => {
-    if (typeof window === 'undefined') return true
-    const stored = localStorage.getItem('ol_sidebar_collapsed')
-    return stored === 'false' ? false : true
-  })
+  const [collapsed, setCollapsed] = useState(true)
   const supabase = createClient()
   const router = useRouter()
+
+  useEffect(() => {
+    const stored = localStorage.getItem('ol_sidebar_collapsed')
+    // Intentional post-hydration sync from persisted client preference.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setCollapsed(stored === 'false' ? false : true)
+  }, [])
 
   const toggleSidebar = () => {
     setCollapsed(prev => {

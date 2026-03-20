@@ -3,20 +3,32 @@
 import { useState, useEffect } from 'react'
 import { useToast } from '@/components/ui/Toast'
 
+type ProfileData = {
+  user_id?: string
+  email?: string
+  name?: string
+  exam_type?: string
+  preferred_time?: string
+  created_at?: string
+}
+
 export default function ProfilePage() {
   const { showToast } = useToast()
-  
+  const [profile, setProfile] = useState<ProfileData | null>(null)
+
   const [name, setName] = useState('')
   const [examType, setExamType] = useState('')
   const [preferredTime, setPreferredTime] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [isEditing, setIsEditing] = useState(false)
 
   useEffect(() => {
     fetch('/api/profile')
       .then(res => res.json())
       .then(data => {
         if (data.profile) {
+          setProfile(data.profile)
           setName(data.profile.name || '')
           setExamType(data.profile.exam_type || '')
           setPreferredTime(data.profile.preferred_time || '')
@@ -41,6 +53,14 @@ export default function ProfilePage() {
       })
 
       if (res.ok) {
+        const data = await res.json()
+        if (data.profile) {
+          setProfile(data.profile)
+          setName(data.profile.name || '')
+          setExamType(data.profile.exam_type || '')
+          setPreferredTime(data.profile.preferred_time || '')
+        }
+        setIsEditing(false)
         showToast('Profile successfully updated! ✦')
       } else {
         const errorData = await res.json()
@@ -53,6 +73,24 @@ export default function ProfilePage() {
     }
   }
 
+  const handleCancelEdit = () => {
+    setName(profile?.name || '')
+    setExamType(profile?.exam_type || '')
+    setPreferredTime(profile?.preferred_time || '')
+    setIsEditing(false)
+  }
+
+  const initials = (name || profile?.name || 'Student')
+    .split(' ')
+    .filter(Boolean)
+    .map(word => word[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase()
+  const joinedDate = profile?.created_at
+    ? new Date(profile.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+    : 'Recently'
+
   return (
     <div style={{ animation: 'pageIn .4s cubic-bezier(.22,.68,0,1.1) both' }}>
       <div className="page-header">
@@ -62,9 +100,46 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      <div className="card" style={{ maxWidth: 600 }}>
+      <div className="card" style={{ maxWidth: isEditing ? 600 : 420, margin: '0 auto' }}>
         {loading ? (
           <div style={{ padding: '20px 0', color: 'var(--text-soft)', fontSize: 14 }}>Loading profile information…</div>
+        ) : !isEditing ? (
+          <div className="profile-id-shell">
+            <div className="profile-id-card">
+              <div className="profile-id-header">OptiLearn Student ID</div>
+
+              <div className="profile-id-top">
+                <div className="profile-id-avatar">{initials}</div>
+                <div className="profile-id-name">{profile?.name || 'Student'}</div>
+                <div className="profile-id-email">{profile?.email || 'No email available'}</div>
+              </div>
+
+              <div className="profile-id-grid">
+                <div>
+                  <span className="profile-id-label">User ID</span>
+                  <div className="profile-id-value profile-id-mono">{profile?.user_id || 'N/A'}</div>
+                </div>
+                <div>
+                  <span className="profile-id-label">Target Exam</span>
+                  <div className="profile-id-value">{profile?.exam_type || 'Not set'}</div>
+                </div>
+                <div>
+                  <span className="profile-id-label">Preferred Time</span>
+                  <div className="profile-id-value">{profile?.preferred_time || 'Auto from logs'}</div>
+                </div>
+                <div>
+                  <span className="profile-id-label">Member Since</span>
+                  <div className="profile-id-value">{joinedDate}</div>
+                </div>
+              </div>
+
+              <div className="profile-id-actions">
+                <button className="btn-primary" onClick={() => setIsEditing(true)}>
+                  Edit Profile
+                </button>
+              </div>
+            </div>
+          </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
             
@@ -114,15 +189,19 @@ export default function ProfilePage() {
             </div>
 
             <div style={{ marginTop: 10 }}>
-              <button 
-                className="btn-primary" 
-                onClick={handleSave} 
-                disabled={saving || !name.trim()}
-                style={{ width: '100%', justifyContent: 'center' }}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-                {saving ? 'Saving Changes…' : 'Save Profile'}
-              </button>
+              <div className="profile-edit-actions">
+                <button className="btn-secondary" onClick={handleCancelEdit} disabled={saving}>
+                  Cancel
+                </button>
+                <button 
+                  className="btn-primary" 
+                  onClick={handleSave} 
+                  disabled={saving || !name.trim()}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                  {saving ? 'Saving Changes…' : 'Save Profile'}
+                </button>
+              </div>
             </div>
 
           </div>

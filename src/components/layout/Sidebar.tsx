@@ -29,6 +29,7 @@ export function Sidebar() {
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [isSmallScreen, setIsSmallScreen] = useState(false)
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
 
   useEffect(() => {
     const media = window.matchMedia('(max-width: 768px)')
@@ -45,6 +46,11 @@ export function Sidebar() {
   const initials = name.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()
 
   const close = () => setMobileOpen(false)
+
+  const handleLogout = async () => {
+    setShowLogoutConfirm(false)
+    await signOut()
+  }
 
   return (
     <>
@@ -133,7 +139,7 @@ export function Sidebar() {
         )}
 
         {/* Logout */}
-        <button className="sidebar-logout" onClick={() => signOut()} title={effectiveCollapsed ? 'Log out' : undefined}>
+        <button className="sidebar-logout" onClick={() => setShowLogoutConfirm(true)} title={effectiveCollapsed ? 'Log out' : undefined}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
             <polyline points="16 17 21 12 16 7"/>
@@ -143,6 +149,22 @@ export function Sidebar() {
         </button>
 
       </aside>
+
+      {showLogoutConfirm && (
+        <div className="logout-confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="logout-confirm-title">
+          <div className="logout-confirm-card">
+            <h3 id="logout-confirm-title">Are you sure you want to logout?</h3>
+            <div className="logout-confirm-actions">
+              <button type="button" className="logout-confirm-primary" onClick={handleLogout}>
+                Logout
+              </button>
+              <button type="button" className="logout-confirm-secondary" onClick={() => setShowLogoutConfirm(false)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }

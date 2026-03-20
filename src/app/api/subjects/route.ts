@@ -43,18 +43,24 @@ export async function POST(request: Request) {
 
     const supabase = await createClient()
 
-    // Ensure user exists in public.users table
-    const { error: userError } = await supabase
-      .from('users')
-      .insert([{ 
-        user_id: session.user.id,
-        name: session.user.name || session.user.email || 'User'
-      }])
-      .select()
-      .single()
+    // Keep public.users in sync for FK/RLS dependencies.
+    if (session.user.email) {
+      const { error: userError } = await supabase
+        .from('users')
+        .upsert(
+          [{
+            user_id: session.user.id,
+            email: session.user.email,
+            name: session.user.name || session.user.email || 'User',
+          }],
+          { onConflict: 'user_id' }
+        )
 
-    if (userError && !userError.message.includes('violates unique constraint')) {
-      console.error('[subjects/POST - user creation]', userError)
+      if (userError) {
+        console.error('[subjects/POST - user upsert]', userError)
+      }
+    } else {
+      console.warn('[subjects/POST] session user has no email; skipping users upsert')
     }
 
     const { data: subject, error } = await supabase
