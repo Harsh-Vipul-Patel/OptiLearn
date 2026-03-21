@@ -2,6 +2,7 @@
 
 import { useToast } from '@/components/ui/Toast'
 import Link from 'next/link'
+import { CheckCircleIcon, ThumbsUpIcon } from '@/components/ui/AppIcons'
 
 interface InsightCardProps {
   text: string
@@ -20,15 +21,20 @@ export function InsightCard({ text, burnoutRisk = 'Low', fatigue = 32 }: Insight
         <button
           className="insight-btn insight-btn-primary"
           onClick={() => showToast('Feedback recorded — insights will improve!')}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
         >
-          👍 Helpful
+          <ThumbsUpIcon width={18} height={18} />
+          Helpful
         </button>
         <Link href="/dashboard/insights" className="insight-btn insight-btn-ghost" style={{ textDecoration: 'none' }}>
           See all →
         </Link>
       </div>
       <div style={{ marginTop: 18, padding: '11px 13px', background: 'rgba(255,255,255,.1)', borderRadius: 'var(--r-sm)', fontSize: 12, opacity: .85, position: 'relative', zIndex: 1 }}>
-        ✅ Burnout risk: <strong>{burnoutRisk}</strong> · Fatigue {fatigue}/100 · Streak intact!
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <CheckCircleIcon width={18} height={18} />
+          Burnout risk: <strong>{burnoutRisk}</strong> · Fatigue {fatigue}/100 · Streak intact!
+        </span>
       </div>
     </div>
   )

@@ -8,6 +8,7 @@ import { GoalRingCard } from '@/components/dashboard/GoalRingCard'
 import { InsightCard } from '@/components/dashboard/InsightCard'
 import { TodayPlanCard } from '@/components/dashboard/TodayPlanCard'
 import { BurnoutMonitor } from '@/components/dashboard/BurnoutMonitor'
+import { AnalyticsIcon, BookIcon, BrainIcon, SparklesIcon, TargetIcon } from '@/components/ui/AppIcons'
 
 type StudyLog = {
   plan_id?: string
@@ -80,10 +81,16 @@ export default function DashboardPage() {
   const hoursToday = hoursTodayNum > 0 ? `${hoursTodayNum.toFixed(1)}h` : '0h'
 
   const colors = ['#4A5FA0', '#C96B3A', '#6B9B7A', '#D4A843', '#B85C7A']
-  const emojis = ['📚', '📐', '⚗️', '💻', '📝']
+  const ringIcons = [
+    <BookIcon key="book" width={17} height={17} />,
+    <TargetIcon key="target" width={17} height={17} />,
+    <AnalyticsIcon key="analytics" width={17} height={17} />,
+    <BrainIcon key="brain" width={17} height={17} />,
+    <SparklesIcon key="sparkles" width={17} height={17} />,
+  ]
   const RING_SUBJECTS = Object.entries(subjectAgg).map(([name, data], i) => ({
     name,
-    emoji: emojis[i % emojis.length],
+    icon: ringIcons[i % ringIcons.length],
     color: colors[i % colors.length],
     hours: `${(data.durationMin / 60).toFixed(1)}h`,
     pct: totalMinToday > 0 ? Math.round((data.durationMin / totalMinToday) * 100) : 0
@@ -112,7 +119,7 @@ export default function DashboardPage() {
       <div className="page-header">
         <div>
           <div className="page-title">
-            Good morning, {session?.user?.name?.split(' ')[0] || 'there'} 👋
+            Good morning, {session?.user?.name?.split(' ')[0] || 'there'}
           </div>
           <div className="page-sub">
             {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}

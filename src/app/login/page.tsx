@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { LockIcon, MailIcon, SparklesIcon, UserIcon, UserWaveIcon } from '@/components/ui/AppIcons'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -64,8 +65,9 @@ export default function LoginPage() {
       </div>
       <div className="login-card">
         <div style={{ fontFamily: "'Plus Jakarta Sans',sans-serif", fontSize: 20, fontWeight: 800, color: 'var(--terra)', marginBottom: 6 }}>OptiLearn</div>
-        <div style={{ fontFamily: "'Plus Jakarta Sans',sans-serif", fontSize: 24, fontWeight: 800, color: 'var(--text-dark)', marginBottom: 6 }}>
-          {isRegister ? 'Create your account 🎓' : 'Welcome back 👋'}
+        <div style={{ fontFamily: "'Plus Jakarta Sans',sans-serif", fontSize: 24, fontWeight: 800, color: 'var(--text-dark)', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
+          {isRegister ? <SparklesIcon width={23} height={23} /> : <UserWaveIcon width={23} height={23} />}
+          {isRegister ? 'Create your account' : 'Welcome back'}
         </div>
         <div style={{ fontSize: '13.5px', color: 'var(--text-soft)', marginBottom: 28, lineHeight: 1.5 }}>
           {isRegister ? 'Join thousands of students studying smarter.' : 'Log in to your study dashboard and keep the streak alive.'}
@@ -74,16 +76,16 @@ export default function LoginPage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {isRegister && (
             <div className="login-input-wrap">
-              <span className="login-input-icon">👤</span>
+              <span className="login-input-icon"><UserIcon width={14} height={14} /></span>
               <input className="login-input" type="text" placeholder="Full name" value={name} onChange={e => setName(e.target.value)} autoComplete="name" />
             </div>
           )}
           <div className="login-input-wrap">
-            <span className="login-input-icon">✉</span>
+            <span className="login-input-icon"><MailIcon width={14} height={14} /></span>
             <input className="login-input" type="email" placeholder="Email address" value={email} onChange={e => setEmail(e.target.value)} autoComplete="email" />
           </div>
           <div className="login-input-wrap">
-            <span className="login-input-icon">🔒</span>
+            <span className="login-input-icon"><LockIcon width={14} height={14} /></span>
             <input className="login-input" type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} autoComplete={isRegister ? 'new-password' : 'current-password'} onKeyDown={e => e.key === 'Enter' && (isRegister ? handleRegister() : handleLogin())} />
           </div>
 

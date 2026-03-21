@@ -6,8 +6,16 @@ import { useStudyLogSync } from '@/hooks/useStudyLogSync'
 import { usePlans } from '@/hooks/usePlans'
 import { useToast } from '@/components/ui/Toast'
 import { Badge } from '@/components/ui/Badge'
+import { BookIcon, FocusIcon, LaptopIcon, PhoneIcon, SparklesIcon, VolumeIcon } from '@/components/ui/AppIcons'
 
-const DISTRACTIONS = ['📱 Phone', '😴 Fatigue', '😐 Boredom', '📖 Hard Material', '🔊 Noise', '💻 Social Media']
+const DISTRACTIONS = [
+  { key: 'phone', label: 'Phone', icon: <PhoneIcon width={14} height={14} /> },
+  { key: 'fatigue', label: 'Fatigue', icon: <FocusIcon width={14} height={14} /> },
+  { key: 'boredom', label: 'Boredom', icon: <FocusIcon width={14} height={14} /> },
+  { key: 'hard-material', label: 'Hard Material', icon: <BookIcon width={14} height={14} /> },
+  { key: 'noise', label: 'Noise', icon: <VolumeIcon width={14} height={14} /> },
+  { key: 'social-media', label: 'Social Media', icon: <LaptopIcon width={14} height={14} /> },
+]
 
 export function LoggerPage() {
   const { data: session } = useSession()
@@ -36,7 +44,7 @@ export function LoggerPage() {
 
   const handleSubmit = async () => {
     if (!selectedPlanId) {
-      showToast('Please select a study plan to log against', '⚠️')
+      showToast('Please select a study plan to log against', 'warning')
       return
     }
     setSubmitting(true)
@@ -60,10 +68,10 @@ export function LoggerPage() {
         setSelectedPlanId('')
       } else {
         const data = await res.json()
-        showToast(data.error || 'Failed to save session', '⚠️')
+        showToast(data.error || 'Failed to save session', 'warning')
       }
     } catch {
-      showToast('Network error', '⚠️')
+      showToast('Network error', 'warning')
     } finally {
       setSubmitting(false)
     }
@@ -130,11 +138,13 @@ export function LoggerPage() {
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 3 }}>
                 {DISTRACTIONS.map(d => (
                   <span
-                    key={d}
-                    className={`d-chip${distractions.includes(d) ? ' active' : ''}`}
-                    onClick={() => toggleDistraction(d)}
+                    key={d.key}
+                    className={`d-chip${distractions.includes(d.label) ? ' active' : ''}`}
+                    onClick={() => toggleDistraction(d.label)}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
                   >
-                    {d}
+                    {d.icon}
+                    {d.label}
                   </span>
                 ))}
               </div>
@@ -179,7 +189,7 @@ export function LoggerPage() {
                     <div className="log-title">{String(log.reflection || '—').slice(0, 60) || 'Study session'}</div>
                     <div className="log-detail">
                       Focus: {Number(log.focus_level)}/5
-                      {analyzed && <span style={{ marginLeft: 8, color: 'var(--sage)' }}>✦ AI: {Number(log.quality_score).toFixed(0)}%</span>}
+                      {analyzed && <span style={{ marginLeft: 8, color: 'var(--sage)', display: 'inline-flex', alignItems: 'center', gap: 4 }}><SparklesIcon width={16} height={16} />AI: {Number(log.quality_score).toFixed(0)}%</span>}
                     </div>
                     <div className="focus-dots">
                       {[1, 2, 3, 4, 5].map(n => (

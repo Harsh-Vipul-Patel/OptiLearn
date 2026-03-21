@@ -1,11 +1,11 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { ReactNode, useEffect, useRef } from 'react'
 import { ProgressBar } from '@/components/ui/ProgressBar'
 
 interface SubjectProgress {
   name: string
-  emoji: string
+  icon?: ReactNode
   color: string
   hours: string
   pct: number
@@ -63,7 +63,10 @@ export function GoalRingCard({ hoursStudied, goalHours, subjects }: GoalRingCard
         {subjects.map((s) => (
           <div key={s.name}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 3, marginTop: 7 }}>
-              <span style={{ color: s.color, fontWeight: 600 }}>{s.emoji} {s.name}</span>
+              <span style={{ color: s.color, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                {s.icon ? <span style={{ display: 'inline-flex' }}>{s.icon}</span> : null}
+                {s.name}
+              </span>
               <span style={{ color: 'var(--text-soft)' }}>{s.hours}</span>
             </div>
             <ProgressBar value={s.pct} color={s.color} />

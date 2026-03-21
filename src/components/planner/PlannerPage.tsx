@@ -5,10 +5,11 @@ import { useToast } from '@/components/ui/Toast'
 import { useSuggestionsSync } from '@/hooks/useStudyLogSync'
 import { useSession } from '@/components/Providers'
 import Link from 'next/link'
+import { BookIcon, SparklesIcon, TargetIcon, TrashIcon } from '@/components/ui/AppIcons'
 
 /* ── Types ── */
 interface SubjectColor { hex: string; light: string }
-interface Subject { id: string; name: string; emoji: string; color: SubjectColor; dbId?: string }
+interface Subject { id: string; name: string; color: SubjectColor; dbId?: string }
 interface PlanBlock { id: string; sid: string; topic: string; time: string; dur: number; diff: string; goal: string }
 
 /* ── Palette ── */
@@ -44,7 +45,6 @@ export function PlannerPage() {
   const [dragSid, setDragSid] = useState<string | null>(null)
   const [selColor, setSelColor] = useState<SubjectColor>(PALETTE[0])
   const [newName, setNewName] = useState('')
-  const [newEmoji, setNewEmoji] = useState('')
   const [qaSubject, setQaSubject] = useState('')
   const [qaTopic, setQaTopic] = useState('')
   const [qaTime, setQaTime] = useState('09:00')
@@ -65,7 +65,6 @@ export function PlannerPage() {
             id: 's' + s.subject_id,
             dbId: String(s.subject_id),
             name: String(s.subject_name),
-            emoji: '📗',
             color: PALETTE[i % PALETTE.length],
           }))
           setSubjects(loadedSubjects)
@@ -100,9 +99,9 @@ export function PlannerPage() {
 
   /* ── Add subject → DB + local state ── */
   const addSubject = useCallback(async () => {
-    if (!newName.trim()) { showToast('Enter a subject name', '⚠️'); return }
+    if (!newName.trim()) { showToast('Enter a subject name', 'warning'); return }
     if (subjects.find(s => s.name.toLowerCase() === newName.toLowerCase())) {
-      showToast('Subject already exists', '⚠️'); return
+      showToast('Subject already exists', 'warning'); return
     }
     try {
       const res = await fetch('/api/subjects', {
@@ -116,17 +115,16 @@ export function PlannerPage() {
         id: 's' + data.subject.subject_id,
         dbId: data.subject.subject_id,
         name: newName.trim(),
-        emoji: newEmoji || '📗',
         color: selColor,
       }
       setSubjects(prev => [...prev, entry])
-      setNewName(''); setNewEmoji('')
+      setNewName('')
       showToast(`"${entry.name}" added!`)
     } catch (e) {
-      showToast('Failed to add subject', '⚠️')
+      showToast('Failed to add subject', 'warning')
       console.error(e)
     }
-  }, [newName, newEmoji, selColor, subjects, showToast])
+  }, [newName, selColor, subjects, showToast])
 
   /* ── Delete subject → DB + local state ── */
   const delSubject = useCallback(async (id: string) => {
@@ -140,18 +138,18 @@ export function PlannerPage() {
       await fetch(`/api/subjects?id=${s.dbId}`, { method: 'DELETE' })
       setSubjects(prev => prev.filter(x => x.id !== id))
       setPlanBlocks(prev => prev.filter(b => b.sid !== id))
-      showToast('Subject removed', '🗑')
+      showToast('Subject removed', 'trash')
     } catch {
-      showToast('Failed to remove subject', '⚠️')
+      showToast('Failed to remove subject', 'warning')
     }
   }, [subjects, showToast])
 
   /* ── Drag & drop plan blocks (local state only) ── */
   const doDropBlock = useCallback((sid: string, hour: string) => {
-    if (planBlocks.find(b => b.time === hour)) { showToast('That slot is already taken!', '⚠️'); return }
+    if (planBlocks.find(b => b.time === hour)) { showToast('That slot is already taken!', 'warning'); return }
     setPlanBlocks(prev => [...prev, { id: 'b' + Date.now(), sid, topic: '', time: hour, dur: 60, diff: 'Medium', goal: 'Learn' }])
     const s = subjects.find(x => x.id === sid)
-    showToast(`${s ? s.emoji + ' ' + s.name : 'Block'} added at ${HLBL[hour]}!`)
+    showToast(`${s ? s.name : 'Block'} added at ${HLBL[hour]}!`)
   }, [planBlocks, subjects, showToast])
 
   const removeBlock = useCallback((id: string) => {
@@ -160,16 +158,16 @@ export function PlannerPage() {
 
   const addBlockFromForm = useCallback(() => {
     const sid = qaSubject || subjects[0]?.id
-    if (!sid) { showToast('No subjects — add one first', '⚠️'); return }
-    if (planBlocks.find(b => b.time === qaTime)) { showToast('That slot is already taken!', '⚠️'); return }
+    if (!sid) { showToast('No subjects — add one first', 'warning'); return }
+    if (planBlocks.find(b => b.time === qaTime)) { showToast('That slot is already taken!', 'warning'); return }
     setPlanBlocks(prev => [...prev, { id: 'b' + Date.now(), sid, topic: qaTopic, time: qaTime, dur: qaDur, diff: qaDiff, goal: qaGoal }])
     const s = subjects.find(x => x.id === sid)
-    showToast(`${s ? s.emoji + ' ' + s.name : 'Block'} added at ${HLBL[qaTime] || qaTime}!`)
+    showToast(`${s ? s.name : 'Block'} added at ${HLBL[qaTime] || qaTime}!`)
   }, [qaSubject, qaTopic, qaTime, qaDur, qaDiff, qaGoal, subjects, planBlocks, showToast])
 
   /* ── Save plan → POST each block to /api/plans ── */
   const savePlan = useCallback(async () => {
-    if (!planBlocks.length) { showToast('Add blocks first', '⚠️'); return }
+    if (!planBlocks.length) { showToast('Add blocks first', 'warning'); return }
     setSaving(true)
     try {
       // For each plan block we need a studyTopic id — right now subjects don't have topics yet,
@@ -199,7 +197,7 @@ export function PlannerPage() {
       )
       const saved = results.filter(r => r.status === 'fulfilled').length
       if (saved === planBlocks.length) {
-        showToast(`Plan saved! ${saved}/${planBlocks.length} blocks saved ✦`)
+        showToast(`Plan saved! ${saved}/${planBlocks.length} blocks saved`, 'info')
       } else {
         const firstFailure = results.find(
           (r): r is PromiseRejectedResult => r.status === 'rejected'
@@ -207,10 +205,10 @@ export function PlannerPage() {
         const reason = firstFailure?.reason instanceof Error
           ? firstFailure.reason.message
           : String(firstFailure?.reason || 'Unknown error')
-        showToast(`Plan saved! ${saved}/${planBlocks.length} blocks saved. ${reason}`, '⚠️')
+        showToast(`Plan saved! ${saved}/${planBlocks.length} blocks saved. ${reason}`, 'warning')
       }
     } catch (e) {
-      showToast('Failed to save plan', '⚠️')
+      showToast('Failed to save plan', 'warning')
       console.error(e)
     } finally {
       setSaving(false)
@@ -227,7 +225,7 @@ export function PlannerPage() {
           <div className="page-sub">Drag subject chips into time slots, or use the quick-add form.</div>
         </div>
         <div className="header-actions">
-          <button className="btn-secondary btn-sm" onClick={() => { setPlanBlocks([]); showToast('Plan cleared', '🗑') }}>🗑 Clear</button>
+          <button className="btn-secondary btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={() => { setPlanBlocks([]); showToast('Plan cleared', 'trash') }}><TrashIcon width={15} height={15} />Clear</button>
           <button className="btn-primary btn-sm" onClick={savePlan} disabled={saving}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
             {saving ? 'Saving…' : 'Save Plan'}
@@ -239,7 +237,7 @@ export function PlannerPage() {
       <div className="subjects-panel">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 13 }}>
           <div className="section-title" style={{ margin: 0 }}>My Subjects</div>
-          <span style={{ fontSize: '11.5px', color: 'var(--text-soft)' }}>✦ Drag a chip → drop on any time slot</span>
+          <span style={{ fontSize: '11.5px', color: 'var(--text-soft)', display: 'inline-flex', alignItems: 'center', gap: 5 }}><SparklesIcon width={14} height={14} />Drag a chip → drop on any time slot</span>
         </div>
         <div className="subjects-grid">
           {subjectsLoading ? (
@@ -257,7 +255,7 @@ export function PlannerPage() {
                 style={{ background: s.color.light, borderColor: s.color.hex, color: s.color.hex }}
               >
                 <span className="chip-dot" style={{ background: s.color.hex }} />
-                <span>{s.emoji} {s.name}</span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><BookIcon width={14} height={14} />{s.name}</span>
                 <button className="chip-del" onClick={() => delSubject(s.id)}>✕</button>
               </div>
             ))
@@ -265,7 +263,6 @@ export function PlannerPage() {
         </div>
         <div className="add-subject-row">
           <input className="form-input" value={newName} onChange={e => setNewName(e.target.value)} onKeyDown={e => e.key === 'Enter' && addSubject()} placeholder="Subject name…" style={{ flex: 1 }} />
-          <input className="form-input" value={newEmoji} onChange={e => setNewEmoji(e.target.value)} placeholder="📗" style={{ width: 52, textAlign: 'center' }} maxLength={2} />
           <div style={{ display: 'flex', gap: 5 }}>
             {PALETTE.map(c => (
               <div key={c.hex} className={`color-swatch${c === selColor ? ' selected' : ''}`} style={{ background: c.hex }} onClick={() => setSelColor(c)} />
@@ -291,11 +288,11 @@ export function PlannerPage() {
               const sid = e.dataTransfer.getData('sid') || dragSid
               if (!sid) return
               const free = HOURS.find(h => !planBlocks.find(b => b.time === h))
-              if (!free) { showToast('All time slots are filled!', '⚠️'); return }
+              if (!free) { showToast('All time slots are filled!', 'warning'); return }
               doDropBlock(sid, free)
             }}
           >
-            <div style={{ fontSize: 20, marginBottom: 4 }}>🎯</div>
+            <div style={{ display: 'inline-flex', marginBottom: 6 }}><TargetIcon width={24} height={24} /></div>
             Drop a subject chip here → fills next free slot automatically
           </div>
           <div>
@@ -310,7 +307,7 @@ export function PlannerPage() {
                     {blk && s ? (
                       <div className="planner-block" style={{ background: c.light, borderLeftColor: c.hex }}>
                         <div style={{ flex: 1 }}>
-                          <div className="pb-subj" style={{ color: c.hex }}>{s.emoji} {s.name}</div>
+                          <div className="pb-subj" style={{ color: c.hex, display: 'inline-flex', alignItems: 'center', gap: 6 }}><BookIcon width={14} height={14} />{s.name}</div>
                           <div className="pb-meta">{blk.topic || 'General study'} · {blk.dur}min · {blk.diff}</div>
                         </div>
                         <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 999, background: c.light, color: c.hex, border: `1px solid ${c.hex}` }}>{blk.goal}</span>
@@ -345,7 +342,7 @@ export function PlannerPage() {
               <div className="form-group">
                 <label className="form-label">Subject</label>
                 <select className="form-select" value={qaSubject} onChange={e => setQaSubject(e.target.value)}>
-                  {subjects.map(s => <option key={s.id} value={s.id}>{s.emoji} {s.name}</option>)}
+                  {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
               </div>
               <div className="form-group">

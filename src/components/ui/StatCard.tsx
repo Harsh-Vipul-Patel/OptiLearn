@@ -1,7 +1,7 @@
-import { CSSProperties } from 'react'
+import { CSSProperties, ReactNode } from 'react'
 
 interface StatCardProps {
-  icon: string
+  icon: ReactNode
   iconBg?: string
   value: string | number
   valueColor?: string
@@ -12,7 +12,7 @@ interface StatCardProps {
 
 export function StatCard({
   icon,
-  iconBg = 'var(--terra-light)',
+  iconBg = 'transparent',
   value,
   valueColor = 'var(--terra)',
   label,

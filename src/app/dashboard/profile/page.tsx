@@ -34,13 +34,13 @@ export default function ProfilePage() {
           setPreferredTime(data.profile.preferred_time || '')
         }
       })
-      .catch(() => showToast('Failed to load profile', '⚠️'))
+      .catch(() => showToast('Failed to load profile', 'warning'))
       .finally(() => setLoading(false))
   }, [showToast])
 
   const handleSave = async () => {
     if (!name.trim()) {
-      showToast('Name is required', '⚠️')
+      showToast('Name is required', 'warning')
       return
     }
 
@@ -64,10 +64,10 @@ export default function ProfilePage() {
         showToast('Profile successfully updated! ✦')
       } else {
         const errorData = await res.json()
-        showToast(errorData.error || 'Failed to update profile', '⚠️')
+        showToast(errorData.error || 'Failed to update profile', 'warning')
       }
     } catch {
-      showToast('Network error', '⚠️')
+      showToast('Network error', 'warning')
     } finally {
       setSaving(false)
     }
