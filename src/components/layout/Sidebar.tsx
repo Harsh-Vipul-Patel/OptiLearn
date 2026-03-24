@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useSession, signOut, useSidebar } from '@/components/Providers'
+import { useSession, signOut } from '@/components/Providers'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
@@ -25,7 +25,6 @@ const NAV_ITEMS = [
 
 export function Sidebar() {
   const { data: session } = useSession()
-  const { collapsed, toggleSidebar } = useSidebar()
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [isSmallScreen, setIsSmallScreen] = useState(false)
@@ -39,7 +38,7 @@ export function Sidebar() {
     return () => media.removeEventListener('change', sync)
   }, [])
 
-  const effectiveCollapsed = collapsed && !isSmallScreen
+  const effectiveCollapsed = false
 
   const name     = session?.user?.name  || 'Student'
   const email    = session?.user?.email || ''
@@ -55,34 +54,20 @@ export function Sidebar() {
   return (
     <>
       {/* ── Global sidebar toggle (all screens) ── */}
-      <button
-        className={`sidebar-global-toggle${effectiveCollapsed ? ' is-collapsed' : ''}${isSmallScreen ? ' is-mobile' : ''}${mobileOpen ? ' is-open' : ''}`}
-        onClick={() => {
-          if (isSmallScreen) {
-            setMobileOpen(o => !o)
-            return
-          }
-          toggleSidebar()
-        }}
-        aria-label={isSmallScreen ? (mobileOpen ? 'Close navigation menu' : 'Open navigation menu') : (effectiveCollapsed ? 'Expand sidebar' : 'Collapse sidebar')}
-      >
-        {isSmallScreen ? (
+      {isSmallScreen && (
+        <button
+          className={`sidebar-global-toggle is-mobile${mobileOpen ? ' is-open' : ''}`}
+          onClick={() => setMobileOpen(o => !o)}
+          aria-label={mobileOpen ? 'Close navigation menu' : 'Open navigation menu'}
+        >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             {mobileOpen
               ? <><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>
               : <><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></>
             }
           </svg>
-        ) : (
-          <svg
-            width="16" height="16" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" strokeWidth="2.5"
-            style={{ transform: effectiveCollapsed ? 'rotate(180deg)' : 'none', transition: 'transform .3s' }}
-          >
-            <polyline points="15 18 9 12 15 6"/>
-          </svg>
-        )}
-      </button>
+        </button>
+      )}
 
       {/* ── Mobile Backdrop ── */}
       <div

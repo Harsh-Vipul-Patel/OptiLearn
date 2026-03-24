@@ -23,8 +23,11 @@ export interface PlanWithDetails {
  * Fetches today's (or a given date's) DailyPlans with subject+topic names included.
  * Used by LoggerPage to populate the plan selector dropdown.
  */
-export function usePlans(date?: string) {
-  const query = date ? `?date=${date}` : ''
+export function usePlans(date?: string, includeLogged = true) {
+  const params = new URLSearchParams()
+  if (date) params.set('date', date)
+  params.set('include_logged', includeLogged ? 'true' : 'false')
+  const query = params.toString() ? `?${params.toString()}` : ''
   const { data, error, isLoading, mutate } = useSWR<{ plans: PlanWithDetails[] }>(
     `/api/plans${query}`,
     fetcher,

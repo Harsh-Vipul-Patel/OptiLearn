@@ -1,12 +1,15 @@
 import { createClient } from '@/lib/supabase/server'
 
 export class PlansService {
-  static async getPlans(userId: string, date?: string | null) {
+  static async getPlans(userId: string, date?: string | null, includeLogged = true) {
     const supabase = await createClient()
     let query = supabase
       .from('daily_plan')
       .select(`
         *,
+        logs:study_log (
+          log_id
+        ),
         studyTopic:study_topic (
           *,
           subject:subject (*)
@@ -21,7 +24,10 @@ export class PlansService {
     const { data, error } = await query
 
     if (error) throw new Error(error.message)
-    return data?.filter((plan) => plan.studyTopic?.subject?.user_id === userId) || []
+
+    const ownedPlans = data?.filter((plan) => plan.studyTopic?.subject?.user_id === userId) || []
+    if (includeLogged) return ownedPlans
+    return ownedPlans.filter((plan) => !Array.isArray(plan.logs) || plan.logs.length === 0)
   }
 
   static async createPlan(data: { topic_id: string, target_duration: number, time_slot?: string, plan_date: string, goal_type?: string }) {

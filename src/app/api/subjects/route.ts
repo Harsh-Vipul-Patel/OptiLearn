@@ -35,7 +35,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json()
-    const { subject_name, subject_category } = body
+    const { subject_name, subject_category, subject_color } = body
 
     if (!subject_name?.trim()) {
       return NextResponse.json({ error: 'subject_name is required' }, { status: 400 })
@@ -69,6 +69,7 @@ export async function POST(request: Request) {
         user_id: session.user.id,
         subject_name: subject_name.trim(),
         subject_category: subject_category?.trim() || null,
+        subject_color: typeof subject_color === 'string' ? subject_color.trim() : null,
       }])
       .select()
       .single()

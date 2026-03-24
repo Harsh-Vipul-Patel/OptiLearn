@@ -12,13 +12,14 @@ export class SubjectsService {
     return data
   }
 
-  static async createSubject(data: { user_id: string, subject_name: string, subject_category?: string }) {
+  static async createSubject(data: { user_id: string, subject_name: string, subject_category?: string, subject_color?: string }) {
     const { data: subject, error } = await (await createClient())
       .from('subject')
       .insert([{
         user_id: data.user_id,
         subject_name: data.subject_name,
-        subject_category: data.subject_category
+        subject_category: data.subject_category,
+        subject_color: data.subject_color
       }])
       .select()
       .single()

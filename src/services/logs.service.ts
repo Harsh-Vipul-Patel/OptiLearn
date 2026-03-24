@@ -29,11 +29,13 @@ export class LogsService {
       .select(`
         *,
         dailyPlan:daily_plan (
+          plan_date,
           topic_id,
           studyTopic:study_topic (
             subject_id,
             subject:subject (
-              user_id
+              user_id,
+              subject_name
             )
           )
         )

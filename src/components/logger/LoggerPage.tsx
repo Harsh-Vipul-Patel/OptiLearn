@@ -22,7 +22,7 @@ export function LoggerPage() {
   const { showToast } = useToast()
   const { logs, isLoading: logsLoading } = useStudyLogSync(session?.user?.id || '')
   const today = new Date().toISOString().slice(0, 10)
-  const { plans, isLoading: plansLoading } = usePlans(today)
+  const { plans, isLoading: plansLoading, mutate: mutatePlans } = usePlans(today, false)
 
 
 
@@ -31,9 +31,52 @@ export function LoggerPage() {
   const [startTime, setStartTime] = useState('09:00')
   const [endTime, setEndTime] = useState('10:30')
   const [focusLevel, setFocusLevel] = useState(3)
+  const [fatigueLevel, setFatigueLevel] = useState(3)
   const [distractions, setDistractions] = useState<string[]>([])
   const [reflection, setReflection] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [dayFilter, setDayFilter] = useState<'all' | 'today' | 'yesterday' | 'last7'>('all')
+  const [subjectFilter, setSubjectFilter] = useState('all')
+  const [expandedLogId, setExpandedLogId] = useState<string | null>(null)
+
+  const isWithinDayFilter = (startTime: unknown) => {
+    if (dayFilter === 'all') return true
+    const date = new Date(String(startTime || ''))
+    if (Number.isNaN(date.getTime())) return false
+
+    const now = new Date()
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const startOfTomorrow = new Date(startOfToday)
+    startOfTomorrow.setDate(startOfTomorrow.getDate() + 1)
+
+    if (dayFilter === 'today') {
+      return date >= startOfToday && date < startOfTomorrow
+    }
+
+    if (dayFilter === 'yesterday') {
+      const startOfYesterday = new Date(startOfToday)
+      startOfYesterday.setDate(startOfYesterday.getDate() - 1)
+      return date >= startOfYesterday && date < startOfToday
+    }
+
+    const sevenDaysAgo = new Date(startOfToday)
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6)
+    return date >= sevenDaysAgo && date < startOfTomorrow
+  }
+
+  const getSubjectName = (log: Record<string, unknown>) => String(
+    (log as { dailyPlan?: { studyTopic?: { subject?: { subject_name?: string } } } }).dailyPlan?.studyTopic?.subject?.subject_name ||
+    'Unknown subject'
+  )
+
+  const filteredLogs = logs.filter((log) => {
+    if (!isWithinDayFilter(log.start_time)) return false
+    const logSubject = getSubjectName(log)
+    if (subjectFilter !== 'all' && logSubject !== subjectFilter) return false
+    return true
+  })
+
+  const uniqueSubjects = Array.from(new Set(logs.map((log) => getSubjectName(log))))
 
   const toggleDistraction = (d: string) => {
     setDistractions(prev => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d])
@@ -57,6 +100,7 @@ export function LoggerPage() {
           start_time: toISO(logDate, startTime),
           end_time:   toISO(logDate, endTime),
           focus_level: focusLevel,
+          fatigue_level: fatigueLevel,
           distractions: distractions.join(', '),
           reflection,
         }),
@@ -66,6 +110,7 @@ export function LoggerPage() {
         setReflection('')
         setDistractions([])
         setSelectedPlanId('')
+        await mutatePlans()
       } else {
         const data = await res.json()
         showToast(data.error || 'Failed to save session', 'warning')
@@ -134,6 +179,12 @@ export function LoggerPage() {
             </div>
 
             <div className="form-group">
+              <label className="form-label">Fatigue Level: <span style={{ color: 'var(--terra)', fontWeight: 700 }}>{fatigueLevel} / 5</span></label>
+              <input className="form-range" type="range" min="1" max="5" step="1" value={fatigueLevel} onChange={e => setFatigueLevel(Number(e.target.value))} />
+              <div className="range-labels"><span>Energized</span><span>Okay</span><span>Exhausted</span></div>
+            </div>
+
+            <div className="form-group">
               <label className="form-label">Distractions</label>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 3 }}>
                 {DISTRACTIONS.map(d => (
@@ -170,23 +221,61 @@ export function LoggerPage() {
         {/* Recent Sessions */}
         <div className="card">
           <div className="section-title">Recent Sessions</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
+            <select className="form-select" value={dayFilter} onChange={e => setDayFilter(e.target.value as 'all' | 'today' | 'yesterday' | 'last7')}>
+              <option value="all">All Days</option>
+              <option value="today">Today</option>
+              <option value="yesterday">Yesterday</option>
+              <option value="last7">Last 7 Days</option>
+            </select>
+            <select className="form-select" value={subjectFilter} onChange={e => setSubjectFilter(e.target.value)}>
+              <option value="all">All Subjects</option>
+              {uniqueSubjects.map(subject => (
+                <option key={subject} value={subject}>{subject}</option>
+              ))}
+            </select>
+          </div>
           {logsLoading ? (
             <div style={{ color: 'var(--text-soft)', fontSize: 13, padding: '12px 0' }}>Loading sessions…</div>
-          ) : logs.length === 0 ? (
-            <div style={{ color: 'var(--text-soft)', fontSize: 13, fontStyle: 'italic', padding: '12px 0' }}>No sessions logged yet.</div>
+          ) : filteredLogs.length === 0 ? (
+            <div style={{ color: 'var(--text-soft)', fontSize: 13, fontStyle: 'italic', padding: '12px 0' }}>No sessions match current filters.</div>
           ) : (
-            logs.slice(0, 6).map((log, i) => {
+            filteredLogs.slice(0, 12).map((log, i) => {
               const start = String(log.start_time || '').slice(11, 16)
+              const startedAt = log.start_time ? new Date(String(log.start_time)) : null
+              const sessionDate = startedAt && !Number.isNaN(startedAt.getTime())
+                ? startedAt.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' })
+                : 'Unknown date'
+              const subjectName = getSubjectName(log)
+              const end = String(log.end_time || '').slice(11, 16)
+              const endedAt = log.end_time ? new Date(String(log.end_time)) : null
+              const durationMin = startedAt && endedAt && !Number.isNaN(startedAt.getTime()) && !Number.isNaN(endedAt.getTime())
+                ? Math.max(0, Math.round((endedAt.getTime() - startedAt.getTime()) / 60000))
+                : null
+              const distractionsList = String(log.distractions || '')
+                .split(',')
+                .map(x => x.trim())
+                .filter(Boolean)
               const effBadge = Number(log.focus_level) >= 4 ? 'sage' : Number(log.focus_level) >= 3 ? 'indigo' : 'terra'
               const analyzed = log.quality_score != null
+              const logId = String(log.log_id || i)
+              const isExpanded = expandedLogId === logId
               return (
-                <div key={i} className="log-item">
+                <div
+                  key={i}
+                  className="log-item"
+                  onClick={() => setExpandedLogId(prev => (prev === logId ? null : logId))}
+                  style={{ cursor: 'pointer', display: 'block' }}
+                >
                   <div className="logger-time-col" style={{ minWidth: 50, textAlign: 'center' }}>
                     <div className="log-time">{start.slice(0, 2)}</div>
                     <div className="log-ampm">{Number(start.slice(0, 2)) < 12 ? 'AM' : 'PM'}</div>
                   </div>
                   <div className="logger-content-col" style={{ flex: 1 }}>
                     <div className="log-title">{String(log.reflection || '—').slice(0, 60) || 'Study session'}</div>
+                    <div className="log-detail">
+                      {subjectName} · {sessionDate}
+                    </div>
                     <div className="log-detail">
                       Focus: {Number(log.focus_level)}/5
                       {analyzed && <span style={{ marginLeft: 8, color: 'var(--sage)', display: 'inline-flex', alignItems: 'center', gap: 4 }}><SparklesIcon width={16} height={16} />AI: {Number(log.quality_score).toFixed(0)}%</span>}
@@ -196,6 +285,18 @@ export function LoggerPage() {
                         <div key={n} className={`focus-dot ${n <= Number(log.focus_level) ? 'focus-filled' : 'focus-empty'}`} />
                       ))}
                     </div>
+                    {isExpanded && (
+                      <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border)' }}>
+                        <div className="log-detail">Date: {sessionDate}</div>
+                        <div className="log-detail">Subject: {subjectName}</div>
+                        <div className="log-detail">Start: {start || '--:--'} · End: {end || '--:--'}</div>
+                        <div className="log-detail">Duration: {durationMin != null ? `${durationMin} min` : 'Unknown'}</div>
+                        <div className="log-detail">Focus: {Number(log.focus_level)}/5 · Fatigue: {Number(log.fatigue_level) || 0}/5</div>
+                        <div className="log-detail">Distractions: {distractionsList.length ? distractionsList.join(', ') : 'None'}</div>
+                        <div className="log-detail">Reflection: {String(log.reflection || 'No reflection added.')}</div>
+                        {analyzed && <div className="log-detail">AI Quality Score: {Number(log.quality_score).toFixed(0)}%</div>}
+                      </div>
+                    )}
                   </div>
                   <Badge variant={effBadge as 'sage' | 'indigo' | 'terra'}>{Number(log.focus_level) * 20}%</Badge>
                 </div>

@@ -12,6 +12,8 @@ interface SubjectColor { hex: string; light: string }
 interface Subject { id: string; name: string; color: SubjectColor; dbId?: string }
 interface PlanBlock { id: string; sid: string; topic: string; time: string; dur: number; diff: string; goal: string }
 
+type SubjectColorMap = Record<string, string>
+
 /* ── Palette ── */
 const PALETTE: SubjectColor[] = [
   { hex: '#C96B3A', light: '#FBF0EA' }, { hex: '#4A5FA0', light: '#EEF1FA' },
@@ -19,6 +21,49 @@ const PALETTE: SubjectColor[] = [
   { hex: '#B85C7A', light: '#FAF0F4' }, { hex: '#2A8C8C', light: '#E8F5F5' },
   { hex: '#6B4F8C', light: '#F2EEF9' },
 ]
+
+const SUBJECT_COLORS_KEY = 'planner.subjectColors.v1'
+
+function getColorByHex(hex?: string | null): SubjectColor | undefined {
+  if (!hex) return undefined
+  return PALETTE.find(c => c.hex.toLowerCase() === String(hex).toLowerCase())
+}
+
+function getStoredSubjectColors(): SubjectColorMap {
+  if (typeof window === 'undefined') return {}
+  try {
+    const raw = window.localStorage.getItem(SUBJECT_COLORS_KEY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw)
+    return typeof parsed === 'object' && parsed !== null ? parsed as SubjectColorMap : {}
+  } catch {
+    return {}
+  }
+}
+
+function setStoredSubjectColor(subjectId: string, colorHex: string) {
+  if (typeof window === 'undefined' || !subjectId || !colorHex) return
+  const current = getStoredSubjectColors()
+  current[subjectId] = colorHex
+  window.localStorage.setItem(SUBJECT_COLORS_KEY, JSON.stringify(current))
+}
+
+function removeStoredSubjectColor(subjectId: string) {
+  if (typeof window === 'undefined' || !subjectId) return
+  const current = getStoredSubjectColors()
+  if (!(subjectId in current)) return
+  delete current[subjectId]
+  window.localStorage.setItem(SUBJECT_COLORS_KEY, JSON.stringify(current))
+}
+
+function paletteColorFromSeed(seed: string): SubjectColor {
+  let hash = 0
+  for (let i = 0; i < seed.length; i += 1) {
+    hash = ((hash << 5) - hash + seed.charCodeAt(i)) | 0
+  }
+  const idx = Math.abs(hash) % PALETTE.length
+  return PALETTE[idx]
+}
 
 const HOURS = ['07:00','08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00']
 const HLBL: Record<string, string> = { '07:00':'7 AM','08:00':'8 AM','09:00':'9 AM','10:00':'10 AM','11:00':'11 AM','12:00':'12 PM','13:00':'1 PM','14:00':'2 PM','15:00':'3 PM','16:00':'4 PM','17:00':'5 PM','18:00':'6 PM','19:00':'7 PM','20:00':'8 PM' }
@@ -61,12 +106,28 @@ export function PlannerPage() {
       .then(r => r.json())
       .then(data => {
         if (data.subjects) {
+          const storedColors = getStoredSubjectColors()
           loadedSubjects = data.subjects.map((s: Record<string, unknown>, i: number) => ({
             id: 's' + s.subject_id,
             dbId: String(s.subject_id),
             name: String(s.subject_name),
-            color: PALETTE[i % PALETTE.length],
+            color: (() => {
+              const subjectId = String(s.subject_id)
+              const fromDb = getColorByHex((s as Record<string, unknown>).subject_color as string | undefined)
+              if (fromDb) return fromDb
+              const fromStorage = getColorByHex(storedColors[subjectId])
+              if (fromStorage) return fromStorage
+              return paletteColorFromSeed(subjectId || `${String(s.subject_name)}-${i}`)
+            })(),
           }))
+
+          // Backfill local storage so deterministic colors remain fixed for old rows.
+          for (const subject of loadedSubjects) {
+            if (subject.dbId) {
+              setStoredSubjectColor(String(subject.dbId), subject.color.hex)
+            }
+          }
+
           setSubjects(loadedSubjects)
         }
       })
@@ -107,7 +168,7 @@ export function PlannerPage() {
       const res = await fetch('/api/subjects', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subject_name: newName.trim() }),
+        body: JSON.stringify({ subject_name: newName.trim(), subject_color: selColor.hex }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
@@ -118,6 +179,9 @@ export function PlannerPage() {
         color: selColor,
       }
       setSubjects(prev => [...prev, entry])
+      if (entry.dbId) {
+        setStoredSubjectColor(String(entry.dbId), entry.color.hex)
+      }
       setNewName('')
       showToast(`"${entry.name}" added!`)
     } catch (e) {
@@ -138,6 +202,7 @@ export function PlannerPage() {
       await fetch(`/api/subjects?id=${s.dbId}`, { method: 'DELETE' })
       setSubjects(prev => prev.filter(x => x.id !== id))
       setPlanBlocks(prev => prev.filter(b => b.sid !== id))
+      removeStoredSubjectColor(String(s.dbId))
       showToast('Subject removed', 'trash')
     } catch {
       showToast('Failed to remove subject', 'warning')

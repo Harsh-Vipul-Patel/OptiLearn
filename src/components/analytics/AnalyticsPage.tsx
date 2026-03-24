@@ -265,8 +265,8 @@ function useCharts(
               {
                 label: 'Planned',
                 data: plannedData,
-                backgroundColor: 'rgba(61,79,140,.18)',
-                borderColor: '#3D4F8C',
+                backgroundColor: 'rgba(201,107,58,.18)',
+                borderColor: '#C96B3A',
                 borderWidth: 1.5,
                 borderRadius: 6,
               },

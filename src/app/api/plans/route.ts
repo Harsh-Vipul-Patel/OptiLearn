@@ -29,8 +29,10 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url)
     const date = searchParams.get('date')
+    const includeLoggedParam = searchParams.get('include_logged')
+    const includeLogged = includeLoggedParam == null ? true : includeLoggedParam === 'true'
 
-    const plans = await PlansService.getPlans(session.user.id, date)
+    const plans = await PlansService.getPlans(session.user.id, date, includeLogged)
 
     return NextResponse.json({ plans }, { status: 200 })
   } catch (error) {
