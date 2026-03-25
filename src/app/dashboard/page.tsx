@@ -15,6 +15,8 @@ type StudyLog = {
   start_time?: string
   end_time?: string | null
   efficiency?: number
+  focus_level?: number
+  fatigue_level?: number
 }
 
 type Suggestion = {
@@ -99,6 +101,66 @@ export default function DashboardPage() {
   const effArr = todayLogs.map((l) => Number(l.efficiency || 0)).filter(Boolean)
   const avgEff = effArr.length > 0 ? Math.round(effArr.reduce((a:number,b:number)=>a+b,0)/effArr.length) + '%' : 'N/A'
 
+  /* ── 3.5 Burnout metrics from last 7 sessions (db-backed logs) ── */
+  const recentLogs = [...typedLogs]
+    .filter((l) => l.start_time)
+    .sort((a, b) => String(b.start_time).localeCompare(String(a.start_time)))
+    .slice(0, 7)
+
+  const avgFatiguePct = recentLogs.length > 0
+    ? Math.round((recentLogs.reduce((sum, l) => sum + Number(l.fatigue_level || 0), 0) / (recentLogs.length * 5)) * 100)
+    : 0
+
+  const avgFocusPct = recentLogs.length > 0
+    ? Math.round((recentLogs.reduce((sum, l) => sum + Number(l.focus_level || 0), 0) / (recentLogs.length * 5)) * 100)
+    : 0
+
+  const todayStart = new Date()
+  todayStart.setHours(0, 0, 0, 0)
+  const sevenDaysAgoStart = new Date(todayStart)
+  sevenDaysAgoStart.setDate(sevenDaysAgoStart.getDate() - 6)
+
+  const uniqueRecentDays = new Set(
+    typedLogs
+      .filter((l) => l.start_time)
+      .map((l) => new Date(String(l.start_time)))
+      .filter((dt) => !Number.isNaN(dt.getTime()) && dt >= sevenDaysAgoStart)
+      .map((dt) => dt.toISOString().slice(0, 10))
+  )
+
+  const consistencyPct = Math.min(100, Math.round((uniqueRecentDays.size / 7) * 100))
+
+  const burnoutScore = Math.round(avgFatiguePct * 0.5 + (100 - consistencyPct) * 0.25 + (100 - avgFocusPct) * 0.25)
+  const burnoutRisk: 'Low' | 'Medium' | 'High' = burnoutScore >= 67 ? 'High' : burnoutScore >= 40 ? 'Medium' : 'Low'
+
+  const burnoutMessage =
+    burnoutRisk === 'High'
+      ? 'High burnout risk detected. Reduce session length and schedule recovery breaks in your next plan.'
+      : burnoutRisk === 'Medium'
+        ? 'Moderate burnout risk. Keep breaks consistent and avoid stacking heavy topics back-to-back.'
+        : 'No burnout detected. Keep sessions balanced and maintain your current rhythm.'
+
+  const burnoutBars = [
+    {
+      label: 'Fatigue Level',
+      value: avgFatiguePct,
+      color: 'linear-gradient(90deg,var(--sage),var(--gold),var(--terra))',
+      valueLabel: `${avgFatiguePct}%`,
+    },
+    {
+      label: 'Study Consistency',
+      value: consistencyPct,
+      color: 'linear-gradient(90deg,var(--sage),#96C9A0)',
+      valueLabel: `${consistencyPct}%`,
+    },
+    {
+      label: 'Focus Quality',
+      value: avgFocusPct,
+      color: 'linear-gradient(90deg,#4A5FA0,#7B8FCC)',
+      valueLabel: `${avgFocusPct}%`,
+    },
+  ]
+
   /* ── 4. Calculate Streak ── */
   let streak = 0
   const uniqueDates = Array.from(new Set(typedLogs.map((l) => String(l.start_time).slice(0,10)))).sort((a,b)=>b.localeCompare(a))
@@ -136,7 +198,7 @@ export default function DashboardPage() {
 
       <div className="grid-2">
         <TodayPlanCard slots={TODAY_SLOTS} doneCount={TODAY_SLOTS.filter(s => s.status === 'done').length} totalCount={TODAY_SLOTS.length} />
-        <BurnoutMonitor />
+        <BurnoutMonitor risk={burnoutRisk} bars={burnoutBars} message={burnoutMessage} />
       </div>
     </div>
   )

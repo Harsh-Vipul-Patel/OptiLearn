@@ -5,27 +5,132 @@ import { useSuggestionsSync } from '@/hooks/useStudyLogSync'
 import { useToast } from '@/components/ui/Toast'
 import { Badge } from '@/components/ui/Badge'
 import { Card } from '@/components/ui/Card'
-import { ReactNode } from 'react'
+import { ReactNode, useMemo, useState } from 'react'
 import { ThumbsDownIcon, ThumbsUpIcon } from '@/components/ui/AppIcons'
 
-const HISTORY_ITEMS = [
-  { time: '9:00 AM',  text: 'Schedule Mechanics in morning for better retention',    badge: 'sage',   label: 'Liked'    },
-  { time: '12:00 PM', text: 'Take a break — 3h straight detected',                  badge: 'terra',  label: 'Dismissed'   },
-  { time: '4:00 PM',  text: 'Afternoon Chemistry sessions show 22% lower efficiency', badge: 'gold',  label: 'Pending'     },
-]
+type SuggestionRow = {
+  id?: string
+  suggestion_id?: string
+  suggestion_text?: string
+  suggestion_type?: string
+  created_at?: string
+}
+
+type FeedbackState = 'like' | 'dislike' | 'pending'
+
+function formatInsightTime(createdAt?: string) {
+  if (!createdAt) return 'Now'
+  const parsed = new Date(createdAt)
+  if (Number.isNaN(parsed.getTime())) return 'Now'
+  return parsed.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+}
+
+function badgeFromReaction(reaction: FeedbackState): { badge: 'sage' | 'terra' | 'gold', label: string } {
+  if (reaction === 'like') return { badge: 'sage', label: 'Liked' }
+  if (reaction === 'dislike') return { badge: 'terra', label: 'Dismissed' }
+  return { badge: 'gold', label: 'Pending' }
+}
 
 export function InsightsPage() {
   const { data: session } = useSession()
-  const { suggestions } = useSuggestionsSync(session?.user?.id || '')
+  const { suggestions, refreshSuggestions, isLoading } = useSuggestionsSync(session?.user?.id || '')
   const { showToast } = useToast()
+  const [feedbackBySuggestion, setFeedbackBySuggestion] = useState<Record<string, FeedbackState>>({})
+  const [isGeneratingInsights, setIsGeneratingInsights] = useState(false)
 
-  const top = (suggestions[0] as Record<string, unknown> | undefined)
-  const topText = top?.content as string | undefined
-    ?? 'Physics peaks 9–11 AM. Mechanics tomorrow morning will yield 31% better recall than your usual afternoon slot.'
+  const normalized = useMemo(() => {
+    return (suggestions as SuggestionRow[])
+      .map((item) => {
+        const id = item.id ?? item.suggestion_id
+        const text = item.suggestion_text?.trim() || ''
+        return {
+          id,
+          text,
+          type: item.suggestion_type || 'General',
+          created_at: item.created_at,
+        }
+      })
+      .filter((item) => item.text.length > 0)
+  }, [suggestions])
+
+  const top = normalized[0]
+  const supportingInsights = normalized.slice(1, 3)
+  const tipInsights = normalized.slice(3, 6)
+
+  const onFeedback = async (suggestionId: string | undefined, reaction: 'like' | 'dislike') => {
+    if (!suggestionId) {
+      showToast('This suggestion cannot be rated yet.', 'info')
+      return
+    }
+
+    try {
+      const response = await fetch('/api/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ suggestion_id: suggestionId, reaction }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Feedback request failed')
+      }
+
+      setFeedbackBySuggestion((prev) => ({ ...prev, [suggestionId]: reaction }))
+      showToast(reaction === 'like' ? 'Feedback recorded. Thanks!' : 'Dismissed', 'info')
+    } catch {
+      showToast('Could not save feedback. Please try again.', 'error')
+    }
+  }
+
+  const onGenerateInsights = async () => {
+    if (!session?.user?.id) {
+      showToast('Please log in to generate insights.', 'error')
+      return
+    }
+
+    try {
+      setIsGeneratingInsights(true)
+      console.log('[InsightsPage] Sending POST /api/insights...')
+      const response = await fetch('/api/insights', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      })
+
+      const data = await response.json()
+      console.log('[InsightsPage] POST response:', response.status, data)
+
+      if (!response.ok) {
+        throw new Error(data?.error || 'Insight generation failed')
+      }
+
+      await refreshSuggestions()
+      showToast(
+        `Insights generated! ${data.processed_logs ?? 0} logs processed, ${(data.suggestions ?? []).length} recommendations.`,
+        'info'
+      )
+    } catch (err) {
+      console.error('[InsightsPage] POST error:', err)
+      showToast('Could not generate insights right now. Please try again.', 'error')
+    } finally {
+      setIsGeneratingInsights(false)
+    }
+  }
+
+  const topText = top?.text || 'No AI insights yet. Log a study session to generate personalized recommendations.'
 
   return (
     <div>
-      <div className="page-title">AI Insights</div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 6, flexWrap: 'wrap' }}>
+        <div className="page-title" style={{ marginBottom: 0 }}>AI Insights</div>
+        <button
+          className="insight-btn insight-btn-primary"
+          type="button"
+          onClick={onGenerateInsights}
+          disabled={isGeneratingInsights || isLoading}
+          style={{ opacity: isGeneratingInsights || isLoading ? 0.7 : 1, cursor: isGeneratingInsights || isLoading ? 'not-allowed' : 'pointer' }}
+        >
+          {isGeneratingInsights ? 'Generating...' : 'Generate Insight'}
+        </button>
+      </div>
       <div className="page-sub">Personalised, non-judgmental guidance based on your actual study data.</div>
 
       <div className="grid-2" style={{ marginBottom: 20 }}>
@@ -33,44 +138,88 @@ export function InsightsPage() {
           <div className="insight-label">Today&apos;s Top Insight</div>
           <div className="insight-text">&quot;{topText}&quot;</div>
           <div className="insight-actions">
-            <button className="insight-btn insight-btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={() => showToast('Feedback recorded — insights will improve!')}><ThumbsUpIcon width={16} height={16} />Helpful</button>
-            <button className="insight-btn insight-btn-ghost" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={() => showToast('Dismissed', 'info')}><ThumbsDownIcon width={16} height={16} />Not now</button>
+            <button className="insight-btn insight-btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={() => onFeedback(top?.id, 'like')}><ThumbsUpIcon width={16} height={16} />Helpful</button>
+            <button className="insight-btn insight-btn-ghost" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={() => onFeedback(top?.id, 'dislike')}><ThumbsDownIcon width={16} height={16} />Not now</button>
           </div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
-          <SmallInsight icon={<TimerIcon />} title="Optimal Session Length" color="var(--terra)"
-            text="45-min sprints + 10-min breaks → ~23% better retention." />
-          <SmallInsight icon={<SwapIcon />} title="Subject Sequencing" color="var(--gold)"
-            text="Alternate Maths ↔ Chemistry to reduce context fatigue." />
+          {supportingInsights.length > 0 ? (
+            supportingInsights.map((item, index) => (
+              <SmallInsight
+                key={item.id || `${item.text}-${index}`}
+                icon={index === 0 ? <TimerIcon /> : <SwapIcon />}
+                title={item.type}
+                color={index === 0 ? 'var(--terra)' : 'var(--gold)'}
+                text={item.text}
+                onLike={() => onFeedback(item.id, 'like')}
+                onDislike={() => onFeedback(item.id, 'dislike')}
+              />
+            ))
+          ) : (
+            <SmallInsight
+              icon={<TimerIcon />}
+              title="Awaiting Insights"
+              color="var(--terra)"
+              text="Generate your first recommendation by logging a completed study session."
+            />
+          )}
         </div>
       </div>
 
       <div className="grid-3" style={{ marginBottom: 20 }}>
-        <InsightTip icon={<AlertIcon />} title="Burnout Warning" text="6 consecutive days fatigue ≥ 3. Consider a lighter Sunday with revision only." badge="terra" badgeLabel="High Priority" />
-        <InsightTip icon={<BookIcon />} title="Task Chunking" text="Break 2h Organic Chemistry into 3 × 40-min sprints. Attention drops after 50 min." badge="indigo" badgeLabel="Smart Tip" />
-        <InsightTip icon={<StarIcon />} title="Positive Reinforcement" text="Chemistry efficiency: 64% → 91% in one week. Morning + no phone = your formula." badge="sage" badgeLabel="Keep it up!" />
+        {tipInsights.length > 0 ? (
+          tipInsights.map((item, index) => (
+            <InsightTip
+              key={item.id || `${item.text}-${index}`}
+              icon={index === 0 ? <AlertIcon /> : index === 1 ? <BookIcon /> : <StarIcon />}
+              title={item.type}
+              text={item.text}
+              badge={index === 0 ? 'terra' : index === 1 ? 'indigo' : 'sage'}
+              badgeLabel={index === 0 ? 'Priority' : index === 1 ? 'Practice' : 'Progress'}
+            />
+          ))
+        ) : (
+          <InsightTip
+            icon={<AlertIcon />}
+            title="No Pattern Yet"
+            text="Add a few more logs to unlock stronger trend-based coaching."
+            badge="gold"
+            badgeLabel="In Progress"
+          />
+        )}
       </div>
 
       <Card>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
           <div className="section-title" style={{ margin: 0 }}>Insight History</div>
-          <Badge variant="indigo">3 today</Badge>
+          <Badge variant="indigo">{normalized.length} total</Badge>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
-          {HISTORY_ITEMS.map((item) => (
-            <div key={item.time} style={{ display: 'flex', gap: 11, alignItems: 'center', padding: '10px 13px', background: 'var(--cream)', borderRadius: 'var(--r-sm)' }}>
-              <div style={{ fontSize: 10, color: 'var(--text-soft)', minWidth: 58 }}>{item.time}</div>
-              <div style={{ flex: 1, fontSize: '12.5px', color: 'var(--text-mid)' }}>{item.text}</div>
-              <Badge variant={item.badge as 'sage' | 'terra' | 'gold'}>{item.label}</Badge>
+          {normalized.length > 0 ? (
+            normalized.map((item, index) => {
+              const reaction = item.id ? (feedbackBySuggestion[item.id] || 'pending') : 'pending'
+              const badgeMeta = badgeFromReaction(reaction)
+
+              return (
+                <div key={item.id || `${item.text}-${index}`} style={{ display: 'flex', gap: 11, alignItems: 'center', padding: '10px 13px', background: 'var(--cream)', borderRadius: 'var(--r-sm)' }}>
+                  <div style={{ fontSize: 10, color: 'var(--text-soft)', minWidth: 58 }}>{formatInsightTime(item.created_at)}</div>
+                  <div style={{ flex: 1, fontSize: '12.5px', color: 'var(--text-mid)' }}>{item.text}</div>
+                  <Badge variant={badgeMeta.badge}>{badgeMeta.label}</Badge>
+                </div>
+              )
+            })
+          ) : (
+            <div style={{ padding: '12px 13px', background: 'var(--cream)', borderRadius: 'var(--r-sm)', fontSize: '12.5px', color: 'var(--text-soft)' }}>
+              No insights yet. Complete a study session and wait for analysis to appear here.
             </div>
-          ))}
+          )}
         </div>
       </Card>
     </div>
   )
 }
 
-function SmallInsight({ icon, title, color, text }: { icon: ReactNode; title: string; color: string; text: string }) {
+function SmallInsight({ icon, title, color, text, onLike, onDislike }: { icon: ReactNode; title: string; color: string; text: string; onLike?: () => void; onDislike?: () => void }) {
   const { showToast } = useToast()
   return (
     <div className="card" style={{ padding: '16px 18px' }}>
@@ -82,8 +231,8 @@ function SmallInsight({ icon, title, color, text }: { icon: ReactNode; title: st
         </div>
       </div>
       <div style={{ marginTop: 9, display: 'flex', gap: 7 }}>
-        <button className="insight-btn" style={{ background: color, color: 'white', padding: '5px 12px', display: 'inline-flex', alignItems: 'center' }} onClick={() => showToast('Feedback recorded!')}><ThumbsUpIcon width={16} height={16} /></button>
-        <button className="insight-btn insight-btn-ghost" style={{ color: 'var(--text-soft)', borderColor: 'var(--border)', padding: '5px 12px', display: 'inline-flex', alignItems: 'center' }}><ThumbsDownIcon width={16} height={16} /></button>
+        <button className="insight-btn" style={{ background: color, color: 'white', padding: '5px 12px', display: 'inline-flex', alignItems: 'center' }} onClick={onLike || (() => showToast('Feedback recorded!', 'info'))}><ThumbsUpIcon width={16} height={16} /></button>
+        <button className="insight-btn insight-btn-ghost" style={{ color: 'var(--text-soft)', borderColor: 'var(--border)', padding: '5px 12px', display: 'inline-flex', alignItems: 'center' }} onClick={onDislike || (() => showToast('Dismissed', 'info'))}><ThumbsDownIcon width={16} height={16} /></button>
       </div>
     </div>
   )

@@ -40,8 +40,9 @@ export function Sidebar() {
 
   const effectiveCollapsed = false
 
-  const name     = session?.user?.name  || 'Student'
   const email    = session?.user?.email || ''
+  const emailPrefix = email.split('@')[0] || ''
+  const name     = session?.user?.name || emailPrefix || 'User'
   const initials = name.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()
 
   const close = () => setMobileOpen(false)

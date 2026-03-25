@@ -10,7 +10,7 @@ import { BookIcon, SparklesIcon, TargetIcon, TrashIcon } from '@/components/ui/A
 /* ── Types ── */
 interface SubjectColor { hex: string; light: string }
 interface Subject { id: string; name: string; color: SubjectColor; dbId?: string }
-interface PlanBlock { id: string; sid: string; topic: string; time: string; dur: number; diff: string; goal: string }
+interface PlanBlock { id: string; sid: string; topic: string; time: string; dur: number; diff: string; goal: string; persisted?: boolean }
 
 type SubjectColorMap = Record<string, string>
 
@@ -148,7 +148,8 @@ export function PlannerPage() {
               time: SLOT_TO_HOUR[String(p.time_slot || '')] || String(p.time_slot || '09:00'),
               dur: Number(p.target_duration || 0),
               diff: String(studyTopic?.complexity || 'Medium'),
-              goal: 'Learn'
+              goal: 'Learn',
+              persisted: true,
             }
           })
           setPlanBlocks(blocks)
@@ -212,7 +213,7 @@ export function PlannerPage() {
   /* ── Drag & drop plan blocks (local state only) ── */
   const doDropBlock = useCallback((sid: string, hour: string) => {
     if (planBlocks.find(b => b.time === hour)) { showToast('That slot is already taken!', 'warning'); return }
-    setPlanBlocks(prev => [...prev, { id: 'b' + Date.now(), sid, topic: '', time: hour, dur: 60, diff: 'Medium', goal: 'Learn' }])
+    setPlanBlocks(prev => [...prev, { id: 'b' + Date.now(), sid, topic: '', time: hour, dur: 60, diff: 'Medium', goal: 'Learn', persisted: false }])
     const s = subjects.find(x => x.id === sid)
     showToast(`${s ? s.name : 'Block'} added at ${HLBL[hour]}!`)
   }, [planBlocks, subjects, showToast])
@@ -225,7 +226,7 @@ export function PlannerPage() {
     const sid = qaSubject || subjects[0]?.id
     if (!sid) { showToast('No subjects — add one first', 'warning'); return }
     if (planBlocks.find(b => b.time === qaTime)) { showToast('That slot is already taken!', 'warning'); return }
-    setPlanBlocks(prev => [...prev, { id: 'b' + Date.now(), sid, topic: qaTopic, time: qaTime, dur: qaDur, diff: qaDiff, goal: qaGoal }])
+    setPlanBlocks(prev => [...prev, { id: 'b' + Date.now(), sid, topic: qaTopic, time: qaTime, dur: qaDur, diff: qaDiff, goal: qaGoal, persisted: false }])
     const s = subjects.find(x => x.id === sid)
     showToast(`${s ? s.name : 'Block'} added at ${HLBL[qaTime] || qaTime}!`)
   }, [qaSubject, qaTopic, qaTime, qaDur, qaDiff, qaGoal, subjects, planBlocks, showToast])
@@ -233,12 +234,19 @@ export function PlannerPage() {
   /* ── Save plan → POST each block to /api/plans ── */
   const savePlan = useCallback(async () => {
     if (!planBlocks.length) { showToast('Add blocks first', 'warning'); return }
+
+    const unsavedBlocks = planBlocks.filter(block => !block.persisted)
+    if (!unsavedBlocks.length) {
+      showToast('No new blocks to save', 'info')
+      return
+    }
+
     setSaving(true)
     try {
       // For each plan block we need a studyTopic id — right now subjects don't have topics yet,
       // so we save what we can. Blocks without topics are skipped.
       const results = await Promise.allSettled(
-        planBlocks.map(block => {
+        unsavedBlocks.map(block => {
           const subj = subjects.find(s => s.id === block.sid)
           if (!subj?.dbId) return Promise.reject('No dbId')
           return fetch('/api/plans', {
@@ -256,13 +264,25 @@ export function PlannerPage() {
               if (!res.ok) {
                 throw new Error(payload?.error || `Request failed (${res.status})`)
               }
-              return payload
+              return { payload, blockId: block.id }
             })
         })
       )
-      const saved = results.filter(r => r.status === 'fulfilled').length
-      if (saved === planBlocks.length) {
-        showToast(`Plan saved! ${saved}/${planBlocks.length} blocks saved`, 'info')
+
+      const fulfilled = results.filter((r): r is PromiseFulfilledResult<{ payload: Record<string, unknown> | null; blockId: string }> => r.status === 'fulfilled')
+      const saved = fulfilled.length
+
+      if (saved > 0) {
+        const savedIds = new Set(fulfilled.map(r => r.value.blockId))
+        setPlanBlocks(prev => prev.map(block => (
+          savedIds.has(block.id)
+            ? { ...block, persisted: true }
+            : block
+        )))
+      }
+
+      if (saved === unsavedBlocks.length) {
+        showToast(`Plan saved! ${saved}/${unsavedBlocks.length} new blocks saved`, 'info')
       } else {
         const firstFailure = results.find(
           (r): r is PromiseRejectedResult => r.status === 'rejected'
@@ -270,7 +290,7 @@ export function PlannerPage() {
         const reason = firstFailure?.reason instanceof Error
           ? firstFailure.reason.message
           : String(firstFailure?.reason || 'Unknown error')
-        showToast(`Plan saved! ${saved}/${planBlocks.length} blocks saved. ${reason}`, 'warning')
+        showToast(`Plan saved! ${saved}/${unsavedBlocks.length} new blocks saved. ${reason}`, 'warning')
       }
     } catch (e) {
       showToast('Failed to save plan', 'warning')

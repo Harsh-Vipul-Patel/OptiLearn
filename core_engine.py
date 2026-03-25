@@ -282,8 +282,8 @@ class SupabaseRepository:
 
         _, subject_row = self._fetch_by_id_candidates(
             candidates=[
-                ('subject', 'subject_id,user_id,subject_name,subject_category'),
-                ('subjects', 'id,user_id,subject_name,subject_category'),
+                ('subject', 'subject_id,user_id,subject_name,subject_category,category'),
+                ('subjects', 'id,user_id,subject_name,subject_category,category'),
             ],
             id_value=subject_id,
             id_columns=['subject_id', 'id'],
@@ -595,11 +595,11 @@ class SupabaseRepository:
             candidates=[
                 (
                     'study_log',
-                    'log_id,plan_id,start_time,end_time,focus_level,distractions,reflection',
+                    'log_id,plan_id,start_time,end_time,focus_level,fatigue_level,distractions,reflection,efficiency',
                 ),
                 (
                     'study_logs',
-                    'id,plan_id,start_time,end_time,focus_level,distractions,reflection',
+                    'id,plan_id,start_time,end_time,focus_level,fatigue_level,distractions,reflection,efficiency',
                 ),
             ],
             filters={'plan_id': f'in.({",".join(plan_meta.keys())})'},
@@ -653,10 +653,13 @@ class SupabaseRepository:
                 'EndTime': end_dt,
                 'TimeSlot': meta.get('time_slot') or 'Morning',
                 'FocusLevel': int(row.get('focus_level') or 3),
+                'FatigueLevel': int(row.get('fatigue_level') or 3),
                 'Distractions': str(row.get('distractions') or ''),
                 'Reflection': str(row.get('reflection') or ''),
                 'Efficiency': float(
-                    analysis_by_log_id.get(str(row_log_id), 0)
+                    self._pick(row, 'efficiency')
+                    if self._pick(row, 'efficiency') is not None
+                    else analysis_by_log_id.get(str(row_log_id), 0)
                 ),
             })
 
@@ -1166,78 +1169,28 @@ class CognitiveAnalyticsEngine:
 
     def generate_today_insights_for_user(self, user_id: str) -> Dict[str, Any]:
         """
-        Analyze sessions for a user and persist insights.
-        1. First tries today's logs.
-        2. Falls back to historical sessions (last 30 days) for pattern-based insights.
+        Analyze every session logged today for a user and persist insights.
         """
         log_ids = self.repository.fetch_today_log_ids_for_user(user_id=user_id)
+        if not log_ids:
+            return {
+                'user_id': user_id,
+                'date': datetime.utcnow().date().isoformat(),
+                'processed_logs': 0,
+                'insights': [],
+            }
 
         insights = []
-
-        # ── Process today's logs ────────────────────────────────────────
         for log_id in log_ids:
-            try:
-                result = self.analyze_study_session_from_db(log_id=log_id, user_id=user_id)
-                try:
-                    persistence = self.repository.upsert_analysis_and_suggestions(user_id=user_id, result=result)
-                    analysis_id = persistence.get('analysis_id', log_id)
-                except Exception as persist_err:
-                    logger.warning('Persistence error for log %s: %s', log_id, persist_err)
-                    analysis_id = log_id
-                insights.append({
-                    'log_id': log_id,
-                    'analysis_id': analysis_id,
-                    'efficiency': result.get('Efficiency', 0),
-                    'quality_score': result.get('QualityScore', 0),
-                    'recommendations': result.get('Recommendations', []),
-                })
-            except Exception as analysis_err:
-                logger.warning('Analysis error for log %s: %s', log_id, analysis_err)
-
-        # ── Fallback: historical pattern-based insights ─────────────────
-        if not insights:
-            logger.info('No today-logs for user %s — falling back to historical insights', user_id)
-            historical_sessions = self.repository.fetch_recent_sessions_for_user(
-                user_id=user_id, days=30, limit=60,
-            )
-            if historical_sessions:
-                # Use the most recent session as the "current" session for insight extraction
-                most_recent = historical_sessions[0]
-                current_session = {
-                    'LogID': most_recent.get('LogID', 'historical'),
-                    'StartTime': most_recent.get('StartTime'),
-                    'EndTime': most_recent.get('EndTime'),
-                    'TimeSlot': most_recent.get('TimeSlot', 'Morning'),
-                    'Distractions': most_recent.get('Distractions', ''),
-                    'Efficiency': float(most_recent.get('Efficiency', 0) or 0),
-                    'FocusLevel': int(most_recent.get('FocusLevel', 3) or 3),
-                }
-                older_sessions = historical_sessions[1:]
-
-                extractor = InsightExtractor(user_id=user_id)
-                insight_bundle = extractor.extract_session_insights(
-                    current_session=current_session,
-                    historical_sessions=older_sessions,
-                )
-                interventions = insight_bundle.get('recommended_interventions', [])
-                recs = self._interventions_to_recommendations(interventions, limit=5)
-
-                # Also generate general pattern recommendations
-                pattern_recs = self._generate_historical_recommendations(
-                    historical_sessions, insight_bundle
-                )
-                for pr in pattern_recs:
-                    if pr not in recs:
-                        recs.append(pr)
-
-                if recs:
-                    insights.append({
-                        'log_id': 'historical_pattern',
-                        'analysis_id': 'pattern_analysis',
-                        'efficiency': current_session['Efficiency'],
-                        'quality_score': 0,
-                        'recommendations': recs[:7],
-                    })
+            result = self.analyze_study_session_from_db(log_id=log_id, user_id=user_id)
+            persistence = self.repository.upsert_analysis_and_suggestions(user_id=user_id, result=result)
+            insights.append({
+                'log_id': log_id,
+                'analysis_id': persistence['analysis_id'],
+                'efficiency': result.get('Efficiency', 0),
+                'quality_score': result.get('QualityScore', 0),
+                'recommendations': result.get('Recommendations', []),
+            })
 
         return {
             'user_id': user_id,
@@ -1245,59 +1198,6 @@ class CognitiveAnalyticsEngine:
             'processed_logs': len(insights),
             'insights': insights,
         }
-
-    def _generate_historical_recommendations(
-        self,
-        sessions: List[Dict[str, Any]],
-        insight_bundle: Dict[str, Any],
-    ) -> List[str]:
-        """Generate user-friendly recommendations from historical patterns."""
-        recs: List[str] = []
-
-        # Temporal patterns
-        temporal = insight_bundle.get('temporal_patterns', {})
-        dow = temporal.get('day_of_week', {})
-        if dow.get('best_day') and dow.get('worst_day') and dow.get('delta', 0) > 10:
-            recs.append(
-                f"Your {dow['best_day']} sessions avg {dow['best_avg']:.0f}% efficiency vs "
-                f"{dow['worst_avg']:.0f}% on {dow['worst_day']}. "
-                f"Schedule harder topics on {dow['best_day']}."
-            )
-
-        # Efficiency trajectory
-        traj = insight_bundle.get('efficiency_trajectory', {})
-        if traj.get('sufficient_data') and traj.get('trajectory') == 'declining':
-            recs.append(
-                f"Your efficiency is trending down ({traj.get('weekly_change_rate', 0):.1f}%/week). "
-                f"Try shorter focused sessions to reverse the trend."
-            )
-        elif traj.get('sufficient_data') and traj.get('trajectory') == 'improving':
-            recs.append(
-                f"Great progress! Your efficiency is improving at "
-                f"+{abs(traj.get('weekly_change_rate', 0)):.1f}%/week. Keep it up!"
-            )
-
-        # Performance correlations
-        perf = insight_bundle.get('performance_correlations', {})
-        if perf.get('sufficient_data'):
-            corr = perf.get('correlations', {})
-            ts_driver = corr.get('timeslot_driver', {})
-            if ts_driver.get('best_timeslot') and ts_driver.get('delta', 0) > 15:
-                recs.append(
-                    f"You perform best during {ts_driver['best_timeslot']} sessions "
-                    f"({ts_driver.get('best_avg_efficiency', 0):.0f}% avg efficiency). "
-                    f"Try scheduling more sessions during this time."
-                )
-
-        # Overall summary
-        if sessions:
-            avg_eff = sum(float(s.get('Efficiency', 0) or 0) for s in sessions) / len(sessions)
-            recs.append(
-                f"Over your last {len(sessions)} sessions, your average efficiency is "
-                f"{avg_eff:.0f}%. {'Room for improvement — try reducing distractions.' if avg_eff < 60 else 'Solid performance!'}"
-            )
-
-        return recs
     
     # ========================================================================
     # STEP 1: ANALYZE STUDY LOG - The Core Tensor Algorithm

@@ -7,6 +7,7 @@ export interface PlanWithDetails {
   plan_date: string
   time_slot: string | null
   target_duration: number
+  logs?: Array<{ log_id: string }>
   studyTopic: {
     topic_id: string
     topic_name: string

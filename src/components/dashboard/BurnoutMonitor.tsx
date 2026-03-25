@@ -24,11 +24,16 @@ export function BurnoutMonitor({
   bars = DEFAULT_BARS,
   message = "No burnout detected. Keep sessions under 2h for best retention.",
 }: BurnoutMonitorProps) {
+  const badgeVariant = risk === 'High' ? 'terra' : risk === 'Medium' ? 'indigo' : 'sage'
+  const panelBg = risk === 'High' ? 'rgba(201, 107, 58, 0.12)' : risk === 'Medium' ? 'rgba(74, 95, 160, 0.12)' : 'var(--sage-light)'
+  const panelTitle = risk === 'High' ? 'Burnout warning' : risk === 'Medium' ? 'Watch your load' : "You're doing great!"
+  const panelTitleColor = risk === 'High' ? 'var(--terra)' : risk === 'Medium' ? 'var(--indigo)' : 'var(--sage)'
+
   return (
     <div className="card">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
         <div className="section-title" style={{ margin: 0 }}>Burnout Monitor</div>
-        <Badge variant="sage">{risk} Risk</Badge>
+        <Badge variant={badgeVariant as 'sage' | 'indigo' | 'terra'}>{risk} Risk</Badge>
       </div>
       <div style={{ fontSize: '11.5px', color: 'var(--text-soft)', marginBottom: 14 }}>Based on your last 7 sessions</div>
       {bars.map((bar) => (
@@ -42,8 +47,8 @@ export function BurnoutMonitor({
           </div>
         </div>
       ))}
-      <div style={{ marginTop: 16, padding: '11px 13px', background: 'var(--sage-light)', borderRadius: 'var(--r-sm)' }}>
-        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--sage)', marginBottom: 2 }}>✓ You&apos;re doing great!</div>
+      <div style={{ marginTop: 16, padding: '11px 13px', background: panelBg, borderRadius: 'var(--r-sm)' }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: panelTitleColor, marginBottom: 2 }}>{panelTitle}</div>
         <div style={{ fontSize: 12, color: 'var(--text-mid)' }}>{message}</div>
       </div>
     </div>

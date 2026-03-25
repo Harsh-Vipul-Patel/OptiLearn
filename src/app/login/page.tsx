@@ -35,7 +35,7 @@ export default function LoginPage() {
       email,
       password,
       options: {
-        data: { name }
+        data: { name, full_name: name }
       }
     })
     setLoading(false)

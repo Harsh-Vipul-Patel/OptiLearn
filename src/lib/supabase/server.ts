@@ -1,6 +1,12 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 
+function resolveSupabaseServerConfig() {
+  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  return { url, key }
+}
+
 /**
  * Server-side Supabase client.
  * Uses SUPABASE_URL / SUPABASE_ANON_KEY (no NEXT_PUBLIC_ prefix)
@@ -9,8 +15,11 @@ import { cookies } from 'next/headers'
 export async function createClient() {
   const cookieStore = await cookies()
 
-  const supabaseUrl = process.env.SUPABASE_URL!
-  const supabaseKey = process.env.SUPABASE_ANON_KEY!
+  const { url: supabaseUrl, key: supabaseKey } = resolveSupabaseServerConfig()
+
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error('Supabase server configuration is missing')
+  }
 
   return createServerClient(supabaseUrl, supabaseKey, {
     cookies: {
@@ -32,8 +41,17 @@ export async function createClient() {
 }
 
 export async function getServerSession() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return null
-  return { user: { id: user.id, email: user.email, name: user.user_metadata?.name || 'User' } }
+  try {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return null
+    const fallbackName =
+      user.user_metadata?.name ||
+      user.user_metadata?.full_name ||
+      user.email?.split('@')[0] ||
+      'User'
+    return { user: { id: user.id, email: user.email, name: fallbackName } }
+  } catch {
+    return null
+  }
 }

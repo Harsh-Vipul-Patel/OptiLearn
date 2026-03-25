@@ -16,6 +16,10 @@ export interface AnalyzePayload {
   topic_complexity: string;
 }
 
+export interface TodayInsightsPayload {
+  user_id: string;
+}
+
 export async function triggerEngineAnalysis(payload: AnalyzePayload) {
   const res = await fetch(`${ENGINE_URL}/engine/analyze`, {
     method: 'POST',
@@ -26,5 +30,18 @@ export async function triggerEngineAnalysis(payload: AnalyzePayload) {
     body: JSON.stringify(payload)
   })
   if (!res.ok) throw new Error(`Engine error: ${res.status}`)
+  return res.json()
+}
+
+export async function triggerTodayInsights(payload: TodayInsightsPayload) {
+  const res = await fetch(`${ENGINE_URL}/engine/insights/today`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-engine-key': ENGINE_KEY!
+    },
+    body: JSON.stringify(payload)
+  })
+  if (!res.ok) throw new Error(`Engine today-insights error: ${res.status}`)
   return res.json()
 }

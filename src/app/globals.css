@@ -428,7 +428,9 @@ body {
   height: 6px;
   overflow: hidden;
   margin-top: 6px;
-  box-shadow: inset 0 1px 3px rgba(60, 40, 20, .08);
+  box-shadow:
+    inset 0 1px 3px rgba(60, 40, 20, .08),
+    0 1px 2px rgba(60, 40, 20, .06);
 }
 
 .progress-fill {
@@ -436,6 +438,9 @@ body {
   border-radius: 999px;
   transition: width 1s cubic-bezier(.22, .68, 0, 1.2);
   position: relative;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .22),
+    0 1px 2px rgba(60, 40, 20, .10);
 }
 
 /* ═══════════ BUTTONS ═══════════ */
@@ -908,13 +913,18 @@ body {
   border-radius: 999px;
   background: var(--cream2);
   overflow: hidden;
-  box-shadow: inset 0 1px 3px rgba(60, 40, 20, .08);
+  box-shadow:
+    inset 0 1px 3px rgba(60, 40, 20, .08),
+    0 1px 2px rgba(60, 40, 20, .06);
 }
 
 .burnout-fill {
   height: 100%;
   border-radius: 999px;
   transition: width 1.2s cubic-bezier(.22, .68, 0, 1.2);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .22),
+    0 1px 2px rgba(60, 40, 20, .10);
 }
 
 /* ═══════════ RING ═══════════ */
@@ -929,6 +939,7 @@ body {
   width: 156px;
   height: 156px;
   transform: rotate(-90deg);
+  filter: drop-shadow(0 1px 2px rgba(60, 40, 20, .10));
 }
 
 .ring-track {
@@ -998,12 +1009,18 @@ body {
   height: 16px;
   border-radius: 3px;
   background: var(--cream2);
-  transition: transform .15s;
+  transition: transform .15s, box-shadow .15s;
   cursor: pointer;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .45),
+    0 1px 2px rgba(60, 40, 20, .08);
 }
 
 .heatmap-cell:hover {
   transform: scale(1.2);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .45),
+    0 2px 5px rgba(60, 40, 20, .14);
 }
 
 .heat-1 {
@@ -1030,6 +1047,17 @@ body {
   position: relative;
   width: 100%;
   height: 220px;
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .78) 0%, rgba(255, 251, 245, .88) 100%);
+  border: 1px solid rgba(100, 80, 50, .07);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .7),
+    0 1px 3px rgba(60, 40, 20, .06);
+  padding: 8px;
+}
+
+.chart-wrap canvas {
+  border-radius: 9px;
 }
 
 /* ═══════════ SUBJECTS PANEL ═══════════ */

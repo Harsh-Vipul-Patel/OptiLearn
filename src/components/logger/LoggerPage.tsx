@@ -22,7 +22,13 @@ export function LoggerPage() {
   const { showToast } = useToast()
   const { logs, isLoading: logsLoading } = useStudyLogSync(session?.user?.id || '')
   const today = new Date().toISOString().slice(0, 10)
-  const { plans, isLoading: plansLoading, mutate: mutatePlans } = usePlans(today, false)
+  const { plans: openPlans, isLoading: openPlansLoading, mutate: mutatePlans } = usePlans(today, false)
+  const { plans: allTodayPlans, isLoading: allTodayPlansLoading } = usePlans(today, true)
+
+  const plans = openPlans
+  const plansLoading = openPlansLoading || allTodayPlansLoading
+  const hasAnyPlanToday = allTodayPlans.length > 0
+  const allSessionsFinishedToday = hasAnyPlanToday && openPlans.length === 0
 
 
 
@@ -137,9 +143,13 @@ export function LoggerPage() {
               <label className="form-label">Study Plan</label>
               {plansLoading ? (
                 <div style={{ fontSize: 13, color: 'var(--text-soft)' }}>Loading plans…</div>
-              ) : plans.length === 0 ? (
+              ) : !hasAnyPlanToday ? (
                 <div style={{ fontSize: 13, color: 'var(--terra)' }}>
                   No plans for today. <a href="/dashboard/planner" style={{ color: 'var(--terra)', fontWeight: 600 }}>Create one →</a>
+                </div>
+              ) : allSessionsFinishedToday ? (
+                <div style={{ fontSize: 13, color: 'var(--sage)' }}>
+                  All sessions finished for today. <a href="/dashboard/planner" style={{ color: 'var(--sage)', fontWeight: 600 }}>Add another plan →</a>
                 </div>
               ) : (
                 <select

@@ -247,16 +247,36 @@ function useCharts(
   monthRef: React.RefObject<HTMLCanvasElement | null>
 ) {
   useEffect(() => {
+    let cancelled = false
     const weekCharts: ChartLike[] = []
     let monthChart: ChartLike | null = null
+    let scriptEl: HTMLScriptElement | null = null
+
+    const destroyExistingOnCanvas = (canvas: HTMLCanvasElement | null, ChartCtor: { getChart?: (item: HTMLCanvasElement) => { destroy: () => void } | undefined }) => {
+      if (!canvas || !ChartCtor?.getChart) return
+      const existing = ChartCtor.getChart(canvas)
+      if (existing) existing.destroy()
+    }
+
+    const destroyAllKnownCharts = () => {
+      // @ts-expect-error Chart is loaded via CDN
+      const Chart = window.Chart as { getChart?: (item: HTMLCanvasElement) => { destroy: () => void } | undefined } | undefined
+      if (!Chart) return
+      destroyExistingOnCanvas(planVsActualRef.current, Chart)
+      destroyExistingOnCanvas(subjectEffRef.current, Chart)
+      destroyExistingOnCanvas(focusTimeRef.current, Chart)
+      destroyExistingOnCanvas(monthRef.current, Chart)
+    }
 
     const buildWeek = () => {
       if (tab !== 'week') return
       // @ts-expect-error Chart is loaded via CDN
       const Chart = window.Chart
       if (!Chart) return
+      if (cancelled) return
 
       if (planVsActualRef.current) {
+        destroyExistingOnCanvas(planVsActualRef.current, Chart)
         weekCharts.push(new Chart(planVsActualRef.current, {
           type: 'bar',
           data: {
@@ -293,11 +313,13 @@ function useCharts(
       }
 
       if (subjectEffRef.current) {
+        destroyExistingOnCanvas(subjectEffRef.current, Chart)
         const bg = ['#4A5FA0','#C96B3A','#6B9B7A','#D4A843','#B85C7A']
         weekCharts.push(new Chart(subjectEffRef.current, { type: 'doughnut', data: { labels: subjectLabels, datasets: [{ data: subjectData, backgroundColor: bg.slice(0, subjectLabels.length), borderWidth: 0, hoverOffset: 7 }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '65%', plugins: { legend: { position: 'right', labels: { font: CHART_FONT, boxWidth: 9, boxHeight: 9, padding: 12 } } } } }))
       }
 
       if (focusTimeRef.current) {
+        destroyExistingOnCanvas(focusTimeRef.current, Chart)
         weekCharts.push(new Chart(focusTimeRef.current, { type: 'line', data: { labels: weekLabels, datasets: [{ label: 'Avg Focus', data: avgFocusData, borderColor: '#D4A843', backgroundColor: 'rgba(212,168,67,.12)', tension: .4, fill: true, pointBackgroundColor: '#D4A843', pointRadius: 4 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { font: CHART_FONT }, grid: { display: false } }, y: { min: 0, max: 5, ticks: { font: CHART_FONT, stepSize: 1 }, grid: { color: 'rgba(100,80,50,.06)' } } } } }))
       }
     }
@@ -307,26 +329,47 @@ function useCharts(
       // @ts-expect-error Chart is loaded via CDN
       const Chart = window.Chart
       if (!Chart) return
+      if (cancelled) return
       
       if (monthRef.current) {
+        destroyExistingOnCanvas(monthRef.current, Chart)
         monthChart = new Chart(monthRef.current, { type: 'bar', data: { labels: weekLabels, datasets: [{ label: 'Monthly Hours Aggregate Placeholder', data: actualData, borderColor: '#4A5FA0', backgroundColor: 'rgba(74,95,160,.6)', borderWidth: 1, borderRadius: 4 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top', labels: { font: CHART_FONT, boxWidth: 9, boxHeight: 9, padding: 12 } } }, scales: { x: { ticks: { font: CHART_FONT }, grid: { display: false } }, y: { ticks: { font: CHART_FONT, callback: (v: number) => v+'h' }, grid: { color: 'rgba(100,80,50,.06)' }, beginAtZero: true } } } })
       }
+    }
+
+    const handleChartReady = () => {
+      if (cancelled) return
+      buildWeek()
+      buildMonth()
     }
 
     // Load Chart.js once
     // @ts-expect-error Chart is loaded via CDN
     if (window.Chart) {
-      buildWeek(); buildMonth()
+      handleChartReady()
     } else {
-      const s = document.createElement('script')
-      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js'
-      s.onload = () => { buildWeek(); buildMonth() }
-      document.head.appendChild(s)
+      const existing = document.getElementById('chartjs-cdn') as HTMLScriptElement | null
+      if (existing) {
+        scriptEl = existing
+        existing.addEventListener('load', handleChartReady)
+      } else {
+        const s = document.createElement('script')
+        s.id = 'chartjs-cdn'
+        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js'
+        s.addEventListener('load', handleChartReady)
+        document.head.appendChild(s)
+        scriptEl = s
+      }
     }
 
     return () => {
+      cancelled = true
+      if (scriptEl) {
+        scriptEl.removeEventListener('load', handleChartReady)
+      }
       weekCharts.forEach(c => c.destroy())
       if (monthChart) monthChart.destroy()
+      destroyAllKnownCharts()
     }
   }, [tab, weekLabels, plannedData, actualData, avgFocusData, subjectLabels, subjectData, planVsActualRef, subjectEffRef, focusTimeRef, monthRef]) // Update when live data loads
 }

@@ -43,11 +43,19 @@ export function Providers({ children }: { children: React.ReactNode }) {
     })
   }
 
+  const resolveDisplayName = (user: { email?: string; user_metadata?: Record<string, unknown> }) => {
+    const meta = user.user_metadata || {}
+    const metaName = (meta.name as string | undefined)?.trim()
+    const metaFullName = (meta.full_name as string | undefined)?.trim()
+    const emailPrefix = (user.email || '').split('@')[0]?.trim()
+    return metaName || metaFullName || emailPrefix || 'User'
+  }
+
   /* Auth */
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user) {
-        setSession({ user: { id: user.id, email: user.email, name: user.user_metadata?.name || 'User' } })
+        setSession({ user: { id: user.id, email: user.email, name: resolveDisplayName(user) } })
       } else {
         setSession(null)
       }
@@ -55,7 +63,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
       if (session?.user) {
-        setSession({ user: { id: session.user.id, email: session.user.email, name: session.user.user_metadata?.name || 'User' } })
+        setSession({ user: { id: session.user.id, email: session.user.email, name: resolveDisplayName(session.user) } })
       } else {
         setSession(null)
       }

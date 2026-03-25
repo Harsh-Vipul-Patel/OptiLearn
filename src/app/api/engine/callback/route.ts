@@ -33,33 +33,77 @@ export async function POST(request: Request) {
 
     const supabase = await createClient()
 
-    // ── 1. Insert analysis into study_log_analysis ─────────────────────
-    const { data: analysis, error: analysisError } = await supabase
+    let analysisId: string | null = null
+
+    // ── 1. Persist analysis (supports both schema variants) ─────────────
+    const analysisInsert = await supabase
       .from('study_log_analysis')
       .insert([{
         log_id,
         user_id,
-        efficiency:    efficiency    ?? null,
-        throughput:    throughput    ?? null,
+        efficiency: efficiency ?? null,
+        throughput: throughput ?? null,
         quality_score: quality_score ?? null,
       }])
-      .select()
+      .select('analysis_id')
       .single()
 
-    if (analysisError) throw new Error(analysisError.message)
+    if (!analysisInsert.error) {
+      analysisId = analysisInsert.data?.analysis_id || null
+    } else {
+      // Fallback for schemas where metrics live directly on study log rows.
+      const metrics = {
+        efficiency: efficiency ?? null,
+        throughput: throughput ?? null,
+        quality_score: quality_score ?? null,
+        analyzed_at: new Date().toISOString(),
+      }
+
+      const updatePlural = await supabase
+        .from('study_logs')
+        .update(metrics)
+        .eq('id', log_id)
+        .eq('user_id', user_id)
+
+      if (updatePlural.error) {
+        const updateSingular = await supabase
+          .from('study_log')
+          .update(metrics)
+          .eq('log_id', log_id)
+
+        if (updateSingular.error) {
+          console.warn('[engine/callback] analysis persistence fallback failed', updateSingular.error.message)
+        }
+      }
+    }
 
     // ── 2. Insert AI suggestions ────────────────────────────────────
     if (Array.isArray(recommendations) && recommendations.length > 0) {
       const inserts = recommendations.map((text: string) => ({
         user_id,
-        analysis_id: analysis.analysis_id,
+        log_id,
         suggestion_text: text,
+        suggestion_type: 'engine',
       }))
+
       const { error: sugError } = await supabase
-        .from('suggestion')
+        .from('suggestions')
         .insert(inserts)
 
-      if (sugError) throw new Error(sugError.message)
+      if (sugError) {
+        const legacyInserts = recommendations.map((text: string) => ({
+          user_id,
+          analysis_id: analysisId || log_id,
+          suggestion_text: text,
+          suggestion_type: 'engine',
+        }))
+
+        const legacyResult = await supabase
+          .from('suggestion')
+          .insert(legacyInserts)
+
+        if (legacyResult.error) throw new Error(legacyResult.error.message)
+      }
     }
 
     return NextResponse.json({ status: 'ok' }, { status: 200 })

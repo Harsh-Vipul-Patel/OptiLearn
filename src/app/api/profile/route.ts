@@ -77,9 +77,9 @@ export async function PUT(request: Request) {
     const normalizedName = (name || '').trim() || user.user_metadata?.name || user.email?.split('@')[0] || 'User'
     const normalizedEmail = user.email || `${user.id}@local.invalid`
 
-    // Optionally update auth user meta-data
+    // Keep both metadata keys in sync so all auth providers resolve the same display name.
     if (normalizedName) {
-      await supabase.auth.updateUser({ data: { name: normalizedName } })
+      await supabase.auth.updateUser({ data: { name: normalizedName, full_name: normalizedName } })
     }
 
     // Upsert ensures the profile row exists even for first-time users.

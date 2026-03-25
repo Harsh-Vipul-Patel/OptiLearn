@@ -115,6 +115,28 @@ export async function POST(request: Request) {
 
     const normalizedTimeSlot = normalizeTimeSlot(time_slot)
 
+    // Prevent duplicate plan entries for the same topic/date/time slot.
+    let duplicateQuery = supabase
+      .from('daily_plan')
+      .select('plan_id')
+      .eq('topic_id', resolvedTopicId)
+      .eq('plan_date', plan_date)
+
+    if (normalizedTimeSlot) {
+      duplicateQuery = duplicateQuery.eq('time_slot', normalizedTimeSlot)
+    } else {
+      duplicateQuery = duplicateQuery.is('time_slot', null)
+    }
+
+    const duplicateCheck = await duplicateQuery.limit(1).maybeSingle()
+    if (duplicateCheck.error && duplicateCheck.error.code !== 'PGRST116') {
+      throw new Error(duplicateCheck.error.message)
+    }
+
+    if (duplicateCheck.data?.plan_id) {
+      return NextResponse.json({ error: 'Plan already exists for this topic and time slot' }, { status: 409 })
+    }
+
     const plan = await PlansService.createPlan({
       topic_id: resolvedTopicId,
       target_duration,
