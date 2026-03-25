@@ -175,14 +175,25 @@ async def generate_today_insights(
     _verify_key(x_engine_key)
 
     try:
-        summary = engine.generate_today_insights_for_user(user_id=req.user_id)
+        # Use LLM-enhanced pipeline if GEMINI_API_KEY is available
+        gemini_key = os.environ.get("GEMINI_API_KEY", "")
+        if gemini_key:
+            summary = engine.generate_llm_insights_for_user(user_id=req.user_id)
+        else:
+            summary = engine.generate_today_insights_for_user(user_id=req.user_id)
 
         # Flatten all recommendations from all processed logs
         all_recommendations: List[str] = []
-        for insight in summary.get("insights", []):
-            for rec in insight.get("recommendations", []):
-                if rec and rec not in all_recommendations:
-                    all_recommendations.append(rec)
+
+        # Prefer AI-generated insights if available
+        ai_insights = summary.get("ai_insights", [])
+        if ai_insights:
+            all_recommendations.extend(ai_insights)
+        else:
+            for insight in summary.get("insights", []):
+                for rec in insight.get("recommendations", []):
+                    if rec and rec not in all_recommendations:
+                        all_recommendations.append(rec)
 
         # POST recommendations via callback so Next.js can persist them
         if all_recommendations and CALLBACK_URL:
@@ -214,7 +225,69 @@ async def generate_today_insights(
             "processed_logs": summary.get("processed_logs", 0),
             "insights": summary.get("insights", []),
             "recommendations": all_recommendations,
+            "llm_used": summary.get("llm_used", False),
         }
     except Exception as error:
         logger.exception("[engine] Error generating insights for user %s", req.user_id)
         raise HTTPException(400, f"Unable to generate insights: {error}")
+
+
+# ── Generate AI-powered insights (dedicated LLM endpoint) ──────────
+@app.post("/engine/insights/generate-ai")
+async def generate_ai_insights(
+    req: TodayInsightsRequest, x_engine_key: str = Header(...)
+):
+    """
+    Dedicated endpoint for LLM-powered insight generation.
+    Always uses Gemini → returns natural-language actionable insights.
+    """
+    _verify_key(x_engine_key)
+
+    try:
+        summary = engine.generate_llm_insights_for_user(user_id=req.user_id)
+
+        ai_insights = summary.get("ai_insights", [])
+        all_recommendations: List[str] = []
+
+        if ai_insights:
+            all_recommendations.extend(ai_insights)
+        else:
+            for insight in summary.get("insights", []):
+                for rec in insight.get("recommendations", []):
+                    if rec and rec not in all_recommendations:
+                        all_recommendations.append(rec)
+
+        # POST via callback
+        if all_recommendations and CALLBACK_URL:
+            first_log_id = None
+            for insight in summary.get("insights", []):
+                if insight.get("log_id"):
+                    first_log_id = insight["log_id"]
+                    break
+
+            await _post_callback(
+                {
+                    "log_id": first_log_id or "ai_insight_batch",
+                    "user_id": req.user_id,
+                    "efficiency": summary["insights"][0].get("efficiency", 0)
+                    if summary.get("insights")
+                    else 0,
+                    "throughput": 0,
+                    "quality_score": summary["insights"][0].get("quality_score", 0)
+                    if summary.get("insights")
+                    else 0,
+                    "recommendations": all_recommendations,
+                }
+            )
+
+        return {
+            "status": "ok",
+            "user_id": req.user_id,
+            "processed_logs": summary.get("processed_logs", 0),
+            "insights": summary.get("insights", []),
+            "recommendations": all_recommendations,
+            "llm_used": summary.get("llm_used", False),
+        }
+    except Exception as error:
+        logger.exception("[engine] Error generating AI insights for user %s", req.user_id)
+        raise HTTPException(400, f"Unable to generate AI insights: {error}")

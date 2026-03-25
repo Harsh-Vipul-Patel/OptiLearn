@@ -852,7 +852,8 @@ class InsightExtractor:
         for session in historical_sessions:
             started = session.get('StartTime')
             if isinstance(started, datetime):
-                points.append((started, float(session.get('Efficiency', 0) or 0)))
+                started_naive = started.replace(tzinfo=None) if started.tzinfo else started
+                points.append((started_naive, float(session.get('Efficiency', 0) or 0)))
 
         if len(points) < 5:
             return {'sufficient_data': False}
@@ -1245,6 +1246,175 @@ class CognitiveAnalyticsEngine:
             'processed_logs': len(insights),
             'insights': insights,
         }
+
+    def generate_llm_insights_for_user(self, user_id: str) -> Dict[str, Any]:
+        """
+        Full pipeline: statistical analysis → InsightExtractor → Gemini LLM.
+
+        Returns LLM-generated natural-language actionable insights alongside
+        the original statistical summary. Falls back to rule-based recs if
+        the LLM is unavailable.
+
+        Now enriched with:
+        - session_summary: aggregate stats (avg efficiency, duration, hours, streak)
+        - subjects_studied: list of subject names the student works on
+        - student_profile: target exam, preferred study time (if available)
+        """
+        from llm_chain import get_insight_chain
+
+        # Step 1: Run existing statistical pipeline
+        summary = self.generate_today_insights_for_user(user_id=user_id)
+
+        # Step 2: Collect rule-based recommendations as fallback
+        fallback_recs: List[str] = []
+        for insight in summary.get('insights', []):
+            for rec in insight.get('recommendations', []):
+                if rec and rec not in fallback_recs:
+                    fallback_recs.append(rec)
+
+        # Step 3: Build insight bundle for LLM
+        insight_bundle: Dict[str, Any] = {}
+        historical_sessions = self.repository.fetch_recent_sessions_for_user(
+            user_id=user_id, days=30, limit=60,
+        )
+        if historical_sessions:
+            most_recent = historical_sessions[0]
+            current_session = {
+                'LogID': most_recent.get('LogID', 'historical'),
+                'StartTime': most_recent.get('StartTime'),
+                'EndTime': most_recent.get('EndTime'),
+                'TimeSlot': most_recent.get('TimeSlot', 'Morning'),
+                'Distractions': most_recent.get('Distractions', ''),
+                'Efficiency': float(most_recent.get('Efficiency', 0) or 0),
+                'FocusLevel': int(most_recent.get('FocusLevel', 3) or 3),
+            }
+            extractor = InsightExtractor(user_id=user_id)
+            insight_bundle = extractor.extract_session_insights(
+                current_session=current_session,
+                historical_sessions=historical_sessions[1:],
+            )
+
+        # ── Step 3b: Enrich insight bundle with minimal important context ──
+
+        # Session summary: aggregate stats for Gemini context
+        if historical_sessions:
+            efficiencies = [
+                float(s.get('Efficiency', 0) or 0) for s in historical_sessions
+            ]
+            durations = []
+            timestamps = []
+            for s in historical_sessions:
+                st = s.get('StartTime')
+                et = s.get('EndTime')
+                if isinstance(st, datetime) and isinstance(et, datetime):
+                    dur_min = (et - st).total_seconds() / 60
+                    if 0 < dur_min < 720:  # only valid durations (< 12h)
+                        durations.append(dur_min)
+                if isinstance(st, datetime):
+                    timestamps.append(st)
+
+            # Compute study streak (consecutive days with sessions)
+            study_streak = 0
+            if timestamps:
+                unique_days = sorted(set(t.date() for t in timestamps), reverse=True)
+                if unique_days:
+                    from datetime import date as _date
+                    today = datetime.utcnow().date()
+                    # Count consecutive days backwards from today/yesterday
+                    check_date = today
+                    if unique_days[0] < today:
+                        check_date = unique_days[0]
+                    for day in unique_days:
+                        if day == check_date:
+                            study_streak += 1
+                            check_date = day - timedelta(days=1)
+                        elif day < check_date:
+                            break
+
+            date_range = ""
+            if timestamps:
+                earliest = min(timestamps).strftime('%b %d')
+                latest = max(timestamps).strftime('%b %d')
+                date_range = f"{earliest} – {latest}"
+
+            insight_bundle['session_summary'] = {
+                'avg_efficiency': float(np.mean(efficiencies)) if efficiencies else 0,
+                'avg_duration_minutes': float(np.mean(durations)) if durations else 0,
+                'total_study_hours': sum(durations) / 60 if durations else 0,
+                'date_range': date_range,
+                'study_streak_days': study_streak,
+                'total_sessions': len(historical_sessions),
+            }
+
+        # Subjects studied: fetch subject names for this user
+        try:
+            subject_names = self._fetch_subject_names_for_user(user_id)
+            if subject_names:
+                insight_bundle['subjects_studied'] = subject_names
+        except Exception as subj_err:
+            logger.debug('Could not fetch subject names: %s', subj_err)
+
+        # Student profile: fetch from users table if available
+        try:
+            profile = self._fetch_student_profile(user_id)
+            if profile:
+                insight_bundle['student_profile'] = profile
+        except Exception as prof_err:
+            logger.debug('Could not fetch student profile: %s', prof_err)
+
+        # Step 4: Call Gemini via LangChain/LangGraph
+        chain = get_insight_chain()
+        ai_insights = chain.generate_actionable_insights(
+            raw_insights=insight_bundle,
+            fallback_recommendations=fallback_recs,
+        )
+
+        summary['ai_insights'] = ai_insights
+        summary['llm_used'] = chain.is_configured and len(ai_insights) > 0 and ai_insights != fallback_recs
+        return summary
+
+    def _fetch_subject_names_for_user(self, user_id: str) -> List[str]:
+        """Fetch distinct subject names for a user (lightweight, best-effort)."""
+        names: List[str] = []
+        for table, select in [
+            ('subject', 'subject_name'),
+            ('subjects', 'subject_name'),
+        ]:
+            rows = self.repository._query_many(
+                table=table,
+                select=select,
+                filters={'user_id': f'eq.{user_id}'},
+                limit=20,
+            )
+            if rows:
+                for row in rows:
+                    name = row.get('subject_name')
+                    if name and name not in names:
+                        names.append(name)
+                break  # found in this table variant
+        return names
+
+    def _fetch_student_profile(self, user_id: str) -> Dict[str, Any]:
+        """Fetch student profile info (target exam, preferred study time, name)."""
+        profile: Dict[str, Any] = {}
+        for table, select in [
+            ('users', 'name,target_exam,preferred_study_time'),
+            ('user', 'name,target_exam,preferred_study_time'),
+        ]:
+            row = self.repository._query_one(
+                table=table,
+                select=select,
+                filters={'id': user_id},
+            )
+            if row:
+                if row.get('name'):
+                    profile['name'] = row['name']
+                if row.get('target_exam'):
+                    profile['target_exam'] = row['target_exam']
+                if row.get('preferred_study_time'):
+                    profile['preferred_study_time'] = row['preferred_study_time']
+                break
+        return profile
 
     def _generate_historical_recommendations(
         self,

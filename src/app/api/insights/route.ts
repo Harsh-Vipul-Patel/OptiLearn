@@ -3,7 +3,7 @@ import { getServerSession } from '@/lib/supabase/server'
 import { createClient } from '@/lib/supabase/server'
 
 import { InsightsService } from '@/services/insights.service'
-import { triggerTodayInsights } from '@/lib/engineClient'
+import { triggerTodayInsights, triggerAIInsights } from '@/lib/engineClient'
 
 export async function GET() {
   try {
@@ -37,24 +37,36 @@ export async function POST() {
     const userId = session.user.id
     console.log('[insights/POST] Generating insights for user:', userId)
 
-    // ── 1. Call the Python engine ──────────────────────────────────
+    // ── 1. Call the Python engine (AI-first, fallback to regular) ─────
     let engineResult: {
       status?: string
       recommendations?: string[]
       processed_logs?: number
+      llm_used?: boolean
       insights?: Array<{ recommendations?: string[]; efficiency?: number; quality_score?: number }>
     } = {}
 
     try {
-      engineResult = await triggerTodayInsights({ user_id: userId })
-      console.log('[insights/POST] Engine response:', JSON.stringify({
+      engineResult = await triggerAIInsights({ user_id: userId })
+      console.log('[insights/POST] AI Engine response:', JSON.stringify({
         status: engineResult.status,
         processed_logs: engineResult.processed_logs,
         recommendations_count: engineResult.recommendations?.length ?? 0,
         insights_count: engineResult.insights?.length ?? 0,
+        llm_used: engineResult.llm_used ?? false,
       }))
-    } catch (engineErr) {
-      console.error('[insights/POST] Engine call failed:', engineErr)
+    } catch (aiErr) {
+      console.warn('[insights/POST] AI endpoint failed, falling back:', aiErr)
+      try {
+        engineResult = await triggerTodayInsights({ user_id: userId })
+        console.log('[insights/POST] Fallback engine response:', JSON.stringify({
+          status: engineResult.status,
+          processed_logs: engineResult.processed_logs,
+          recommendations_count: engineResult.recommendations?.length ?? 0,
+        }))
+      } catch (engineErr) {
+        console.error('[insights/POST] Both engine calls failed:', engineErr)
+      }
     }
 
     // ── 2. Collect ALL recommendations from engine response ───────
@@ -148,6 +160,7 @@ export async function POST() {
       suggestions,
       engine_status: engineResult.status || 'unknown',
       processed_logs: engineResult.processed_logs ?? 0,
+      llm_used: engineResult.llm_used ?? false,
     }, { status: 200 })
   } catch (error) {
     console.error('[insights/POST] Fatal error:', error)

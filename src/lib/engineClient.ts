@@ -45,3 +45,17 @@ export async function triggerTodayInsights(payload: TodayInsightsPayload) {
   if (!res.ok) throw new Error(`Engine today-insights error: ${res.status}`)
   return res.json()
 }
+
+export async function triggerAIInsights(payload: TodayInsightsPayload) {
+  const res = await fetch(`${ENGINE_URL}/engine/insights/generate-ai`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-engine-key': ENGINE_KEY!
+    },
+    body: JSON.stringify(payload)
+  })
+  if (!res.ok) throw new Error(`Engine AI-insights error: ${res.status}`)
+  return res.json()
+}
+
