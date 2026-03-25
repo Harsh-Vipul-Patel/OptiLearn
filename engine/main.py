@@ -1,12 +1,12 @@
 """
 OptiLearn AI Engine — FastAPI server
-Deployed on Railway, called by the Vercel-hosted Next.js frontend.
+Deployed on Render, called by the Vercel-hosted Next.js frontend.
 """
 
 from pathlib import Path
 from dotenv import load_dotenv
 
-# Load .env from the engine folder (works locally; on Railway env vars are set directly)
+# Load .env from the engine folder (works locally; on Render env vars are set in the dashboard)
 _env_path = Path(__file__).resolve().parent / ".env"
 if _env_path.exists():
     load_dotenv(_env_path)

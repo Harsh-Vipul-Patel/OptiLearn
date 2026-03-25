@@ -1,0 +1,22 @@
+# render.yaml — Render Blueprint specification
+# https://docs.render.com/blueprint-spec
+
+services:
+  - type: web
+    name: optilearn-engine
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: ENGINE_API_KEY
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: CALLBACK_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
