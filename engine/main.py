@@ -118,7 +118,7 @@ async def _post_callback(payload: dict) -> None:
 
 
 # ── Health ──────────────────────────────────────────────────────────
-@app.get("/")
+@app.api_route("/", methods=["GET", "HEAD"])
 async def root():
     return {"status": "ok", "service": "OptiLearn AI Engine", "version": "1.0.0"}
 
