@@ -18,7 +18,7 @@ export function InsightCard({ text, burnoutRisk = 'Low', fatigue = 32 }: Insight
   const onGenerateInsights = async () => {
     try {
       setIsGenerating(true)
-      const response = await fetch('/api/insights', { method: 'GET' })
+      const response = await fetch('/api/insights', { method: 'POST' })
       if (!response.ok) {
         throw new Error('Insights generation request failed')
       }
