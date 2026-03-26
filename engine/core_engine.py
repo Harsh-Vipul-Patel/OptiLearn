@@ -1275,7 +1275,7 @@ class CognitiveAnalyticsEngine:
         # Step 3: Build insight bundle for LLM
         insight_bundle: Dict[str, Any] = {}
         historical_sessions = self.repository.fetch_recent_sessions_for_user(
-            user_id=user_id, days=30, limit=60,
+            user_id=user_id, days=30, limit=15,
         )
         if historical_sessions:
             most_recent = historical_sessions[0]
