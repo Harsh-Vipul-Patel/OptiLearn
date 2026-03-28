@@ -190,7 +190,14 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: 'Plan not found' }, { status: 404 })
     }
 
-    if (planOwnership.studyTopic?.subject?.user_id !== session.user.id) {
+    const studyTopic = Array.isArray(planOwnership.studyTopic)
+      ? planOwnership.studyTopic[0]
+      : planOwnership.studyTopic
+    const subjectOwner = Array.isArray(studyTopic?.subject)
+      ? studyTopic.subject[0]
+      : studyTopic?.subject
+
+    if (subjectOwner?.user_id !== session.user.id) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
