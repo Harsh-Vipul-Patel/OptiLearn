@@ -589,9 +589,11 @@ html {
 .range-labels {
   display: flex;
   justify-content: space-between;
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-soft);
-  margin-top: 4px;
+  margin-top: 6px;
+  font-weight: 500;
+  user-select: none;
 }
 
 /* ═══════════ INSIGHT CARD ═══════════ */

@@ -29,7 +29,9 @@ export class LogsService {
       .select(`
         *,
         dailyPlan:daily_plan (
+          plan_id,
           plan_date,
+          time_slot,
           topic_id,
           studyTopic:study_topic (
             subject_id,

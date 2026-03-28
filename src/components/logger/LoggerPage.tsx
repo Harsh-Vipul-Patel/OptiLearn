@@ -21,7 +21,8 @@ export function LoggerPage() {
   const { data: session } = useSession()
   const { showToast } = useToast()
   const { logs, isLoading: logsLoading } = useStudyLogSync(session?.user?.id || '')
-  const today = new Date().toISOString().slice(0, 10)
+  const nowLocal = new Date()
+  const today = `${nowLocal.getFullYear()}-${String(nowLocal.getMonth() + 1).padStart(2, '0')}-${String(nowLocal.getDate()).padStart(2, '0')}`
   const { plans: openPlans, isLoading: openPlansLoading, mutate: mutatePlans } = usePlans(today, false)
   const { plans: allTodayPlans, isLoading: allTodayPlansLoading } = usePlans(today, true)
 
@@ -90,12 +91,53 @@ export function LoggerPage() {
 
   /** Converts a date string (YYYY-MM-DD) + time string (HH:MM) → ISO DateTime string */
   const toISO = (date: string, time: string) => new Date(`${date}T${time}:00`).toISOString()
+  const toLocalDateTime = (date: string, time: string) => new Date(`${date}T${time}:00`)
 
   const handleSubmit = async () => {
     if (!selectedPlanId) {
       showToast('Please select a study plan to log against', 'warning')
       return
     }
+
+    const now = new Date()
+    const sessionStartTime = toLocalDateTime(logDate, startTime)
+    const sessionEndTime = toLocalDateTime(logDate, endTime)
+
+    if (Number.isNaN(sessionStartTime.getTime()) || Number.isNaN(sessionEndTime.getTime())) {
+      showToast('Invalid date/time selected', 'warning')
+      return
+    }
+
+    if (sessionStartTime >= sessionEndTime) {
+      showToast('End time must be after start time', 'warning')
+      return
+    }
+
+    // Validate: Session should not be in the future
+    if (sessionStartTime > now) {
+      showToast('Cannot log a session that starts in the future', 'warning')
+      return
+    }
+
+    // Validate: Session end time should not be in the future
+    if (sessionEndTime > now) {
+      showToast('Session end time cannot be in the future', 'warning')
+      return
+    }
+
+    // Validate: No overlap with existing logged sessions.
+    const hasOverlap = logs.some((log) => {
+      const existingStart = new Date(String(log.start_time || ''))
+      const existingEnd = new Date(String(log.end_time || ''))
+      if (Number.isNaN(existingStart.getTime()) || Number.isNaN(existingEnd.getTime())) return false
+      return sessionStartTime < existingEnd && existingStart < sessionEndTime
+    })
+
+    if (hasOverlap) {
+      showToast('This session overlaps with an already logged session', 'warning')
+      return
+    }
+
     setSubmitting(true)
     try {
       const res = await fetch('/api/logs', {
@@ -184,14 +226,18 @@ export function LoggerPage() {
 
             <div className="form-group">
               <label className="form-label">Focus Level: <span style={{ color: 'var(--terra)', fontWeight: 700 }}>{focusLevel} / 5</span></label>
-              <input className="form-range" type="range" min="1" max="5" step="1" value={focusLevel} onChange={e => setFocusLevel(Number(e.target.value))} />
-              <div className="range-labels"><span>Distracted</span><span>Moderate</span><span>Laser-focused</span></div>
+              <div style={{ position: 'relative', paddingBottom: '24px' }}>
+                <input className="form-range" type="range" min="1" max="5" step="1" value={focusLevel} onChange={e => setFocusLevel(Number(e.target.value))} />
+                <div className="range-labels" style={{ position: 'absolute', bottom: '0', left: '0', right: '0', display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-soft)', fontWeight: '500', userSelect: 'none', paddingLeft: '2px', paddingRight: '2px' }}><span>Distracted</span><span>Moderate</span><span>Laser-focused</span></div>
+              </div>
             </div>
 
             <div className="form-group">
               <label className="form-label">Fatigue Level: <span style={{ color: 'var(--terra)', fontWeight: 700 }}>{fatigueLevel} / 5</span></label>
-              <input className="form-range" type="range" min="1" max="5" step="1" value={fatigueLevel} onChange={e => setFatigueLevel(Number(e.target.value))} />
-              <div className="range-labels"><span>Energized</span><span>Okay</span><span>Exhausted</span></div>
+              <div style={{ position: 'relative', paddingBottom: '24px' }}>
+                <input className="form-range" type="range" min="1" max="5" step="1" value={fatigueLevel} onChange={e => setFatigueLevel(Number(e.target.value))} />
+                <div className="range-labels" style={{ position: 'absolute', bottom: '0', left: '0', right: '0', display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-soft)', fontWeight: '500', userSelect: 'none', paddingLeft: '2px', paddingRight: '2px' }}><span>Energized</span><span>Okay</span><span>Exhausted</span></div>
+              </div>
             </div>
 
             <div className="form-group">
