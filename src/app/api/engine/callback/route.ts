@@ -81,25 +81,25 @@ export async function POST(request: Request) {
     if (Array.isArray(recommendations) && recommendations.length > 0) {
       const inserts = recommendations.map((text: string) => ({
         user_id,
-        log_id,
+        analysis_id: analysisId,
         suggestion_text: text,
-        suggestion_type: 'engine',
+        suggestion_type: 'SubjectTip',
       }))
 
       const { error: sugError } = await supabase
-        .from('suggestions')
+        .from('suggestion')
         .insert(inserts)
 
       if (sugError) {
         const legacyInserts = recommendations.map((text: string) => ({
           user_id,
-          analysis_id: analysisId || log_id,
+          log_id,
           suggestion_text: text,
-          suggestion_type: 'engine',
+          suggestion_type: 'SubjectTip',
         }))
 
         const legacyResult = await supabase
-          .from('suggestion')
+          .from('suggestions')
           .insert(legacyInserts)
 
         if (legacyResult.error) throw new Error(legacyResult.error.message)

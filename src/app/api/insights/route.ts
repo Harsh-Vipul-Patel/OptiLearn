@@ -108,32 +108,32 @@ export async function POST() {
 
       const inserts = allRecs.map((text) => ({
         user_id: userId,
-        log_id: 'engine_insight',
+        analysis_id: null,
         suggestion_text: text,
-        suggestion_type: 'engine',
+        suggestion_type: 'SubjectTip',
       }))
 
       const { error: insertErr } = await supabase
-        .from('suggestions')
+        .from('suggestion')
         .insert(inserts)
 
       if (insertErr) {
-        console.warn('[insights/POST] suggestions insert failed:', insertErr.message)
-        // Try legacy table name
+        console.warn('[insights/POST] suggestion insert failed:', insertErr.message)
+        // Try legacy plural table name
         const legacyInserts = allRecs.map((text) => ({
           user_id: userId,
-          analysis_id: 'engine_insight',
+          log_id: null,
           suggestion_text: text,
-          suggestion_type: 'engine',
+          suggestion_type: 'SubjectTip',
         }))
-        const { error: legacyErr } = await supabase.from('suggestion').insert(legacyInserts)
+        const { error: legacyErr } = await supabase.from('suggestions').insert(legacyInserts)
         if (legacyErr) {
-          console.error('[insights/POST] legacy suggestion insert also failed:', legacyErr.message)
+          console.error('[insights/POST] legacy suggestions insert also failed:', legacyErr.message)
         } else {
-          console.log('[insights/POST] Saved to legacy "suggestion" table')
+          console.log('[insights/POST] Saved to legacy "suggestions" table')
         }
       } else {
-        console.log('[insights/POST] Saved', inserts.length, 'recommendations to "suggestions" table')
+        console.log('[insights/POST] Saved', inserts.length, 'recommendations to "suggestion" table')
       }
     }
 
@@ -149,9 +149,9 @@ export async function POST() {
       suggestions = allRecs.map((text, i) => ({
         id: `mem_${i}`,
         user_id: userId,
-        log_id: 'engine_insight',
+        log_id: null,
         suggestion_text: text,
-        suggestion_type: 'engine',
+        suggestion_type: 'SubjectTip',
         created_at: new Date().toISOString(),
       }))
     }

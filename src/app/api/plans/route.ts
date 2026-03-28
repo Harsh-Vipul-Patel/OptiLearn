@@ -153,3 +153,140 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unknown error' }, { status: 400 })
   }
 }
+
+export async function PUT(request: Request) {
+  try {
+    const session = await getServerSession()
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const supabase = await createClient()
+    const body = await request.json()
+    const { plan_id, topic_id, target_duration, time_slot, plan_date, goal_type } = body
+
+    if (!plan_id || !topic_id || !target_duration || !plan_date) {
+      return NextResponse.json({ error: 'plan_id, topic_id, target_duration and plan_date are required' }, { status: 400 })
+    }
+
+    const { data: planOwnership, error: planOwnershipError } = await supabase
+      .from('daily_plan')
+      .select(`
+        plan_id,
+        logs:study_log (log_id),
+        studyTopic:study_topic (
+          topic_id,
+          subject:subject (user_id)
+        )
+      `)
+      .eq('plan_id', plan_id)
+      .maybeSingle()
+
+    if (planOwnershipError && planOwnershipError.code !== 'PGRST116') {
+      throw new Error(planOwnershipError.message)
+    }
+
+    if (!planOwnership?.plan_id) {
+      return NextResponse.json({ error: 'Plan not found' }, { status: 404 })
+    }
+
+    if (planOwnership.studyTopic?.subject?.user_id !== session.user.id) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    if (Array.isArray(planOwnership.logs) && planOwnership.logs.length > 0) {
+      return NextResponse.json({ error: 'Cannot update a plan that already has a logged session' }, { status: 409 })
+    }
+
+    let resolvedTopicId = topic_id as string
+
+    const { data: subjectFallback, error: subjectLookupError } = await supabase
+      .from('subject')
+      .select('subject_id, user_id')
+      .eq('subject_id', topic_id)
+      .maybeSingle()
+
+    if (subjectLookupError && subjectLookupError.code !== 'PGRST116') {
+      throw new Error(subjectLookupError.message)
+    }
+
+    if (subjectFallback) {
+      if (subjectFallback.user_id !== session.user.id) {
+        return NextResponse.json({ error: 'Invalid subject ownership' }, { status: 403 })
+      }
+
+      const { data: existingTopic, error: existingTopicError } = await supabase
+        .from('study_topic')
+        .select('topic_id')
+        .eq('subject_id', subjectFallback.subject_id)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle()
+
+      if (existingTopicError && existingTopicError.code !== 'PGRST116') {
+        throw new Error(existingTopicError.message)
+      }
+
+      if (existingTopic?.topic_id) {
+        resolvedTopicId = existingTopic.topic_id
+      } else {
+        const { data: createdTopic, error: createTopicError } = await supabase
+          .from('study_topic')
+          .insert([
+            {
+              subject_id: subjectFallback.subject_id,
+              topic_name: 'General Study',
+              complexity: 'Medium',
+            },
+          ])
+          .select('topic_id')
+          .single()
+
+        if (createTopicError) {
+          throw new Error(createTopicError.message)
+        }
+
+        resolvedTopicId = createdTopic.topic_id
+      }
+    }
+
+    const normalizedTimeSlot = normalizeTimeSlot(time_slot)
+
+    let duplicateQuery = supabase
+      .from('daily_plan')
+      .select('plan_id')
+      .eq('topic_id', resolvedTopicId)
+      .eq('plan_date', plan_date)
+      .neq('plan_id', plan_id)
+
+    if (normalizedTimeSlot) {
+      duplicateQuery = duplicateQuery.eq('time_slot', normalizedTimeSlot)
+    } else {
+      duplicateQuery = duplicateQuery.is('time_slot', null)
+    }
+
+    const duplicateCheck = await duplicateQuery.limit(1).maybeSingle()
+    if (duplicateCheck.error && duplicateCheck.error.code !== 'PGRST116') {
+      throw new Error(duplicateCheck.error.message)
+    }
+
+    if (duplicateCheck.data?.plan_id) {
+      return NextResponse.json({ error: 'Plan already exists for this topic and time slot' }, { status: 409 })
+    }
+
+    const plan = await PlansService.updatePlan(plan_id, {
+      topic_id: resolvedTopicId,
+      target_duration,
+      time_slot: normalizedTimeSlot,
+      plan_date,
+      goal_type: goal_type ?? null,
+    })
+
+    return NextResponse.json({ plan }, { status: 200 })
+  } catch (error) {
+    if (error instanceof Error) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+    return NextResponse.json({ error: 'Unknown error' }, { status: 400 })
+  }
+}

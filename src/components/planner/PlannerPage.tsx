@@ -10,7 +10,7 @@ import { BookIcon, SparklesIcon, TargetIcon, TrashIcon } from '@/components/ui/A
 /* ── Types ── */
 interface SubjectColor { hex: string; light: string }
 interface Subject { id: string; name: string; color: SubjectColor; dbId?: string }
-interface PlanBlock { id: string; sid: string; topic: string; time: string; dur: number; diff: string; goal: string; persisted?: boolean }
+interface PlanBlock { id: string; sid: string; topic: string; time: string; dur: number; diff: string; goal: string; persisted?: boolean; planId?: string; logged?: boolean; planDate?: string }
 
 type SubjectColorMap = Record<string, string>
 
@@ -97,6 +97,7 @@ export function PlannerPage() {
   const [qaDiff, setQaDiff] = useState('Medium')
   const [qaGoal, setQaGoal] = useState('Learn')
   const [dragOverSlot, setDragOverSlot] = useState<string | null>(null)
+  const [editingBlockId, setEditingBlockId] = useState<string | null>(null)
 
   /* ── Load subjects from DB on mount ── */
   useEffect(() => {
@@ -143,6 +144,7 @@ export function PlannerPage() {
             const subj = loadedSubjects.find(s => s.dbId === String(subject?.subject_id || ''))
             return {
               id: 'b' + String(p.plan_id),
+              planId: String(p.plan_id),
               sid: subj?.id || '',
               topic: String(studyTopic?.topic_name || ''),
               time: SLOT_TO_HOUR[String(p.time_slot || '')] || String(p.time_slot || '09:00'),
@@ -150,6 +152,8 @@ export function PlannerPage() {
               diff: String(studyTopic?.complexity || 'Medium'),
               goal: 'Learn',
               persisted: true,
+              logged: Array.isArray(p.logs) && p.logs.length > 0,
+              planDate: String(p.plan_date || today),
             }
           })
           setPlanBlocks(blocks)
@@ -223,13 +227,98 @@ export function PlannerPage() {
   }, [])
 
   const addBlockFromForm = useCallback(() => {
+    const editingBlock = editingBlockId ? planBlocks.find(b => b.id === editingBlockId) : null
+
+    if (editingBlock) {
+      if (editingBlock.logged) {
+        showToast('This session is already logged and cannot be edited', 'warning')
+        return
+      }
+
+      const sid = qaSubject || editingBlock.sid
+      if (!sid) { showToast('No subjects — add one first', 'warning'); return }
+      const isTimeChanged = qaTime !== editingBlock.time
+      if (isTimeChanged && planBlocks.find(b => b.id !== editingBlock.id && b.time === qaTime)) {
+        showToast('That slot is already taken!', 'warning')
+        return
+      }
+
+      const applyLocalUpdate = () => {
+        setPlanBlocks(prev => prev.map(b => (
+          b.id === editingBlock.id
+            ? { ...b, sid, topic: qaTopic, time: qaTime, dur: qaDur, diff: qaDiff, goal: qaGoal }
+            : b
+        )))
+        setEditingBlockId(null)
+        setQaTopic('')
+        setQaDur(60)
+        setQaDiff('Medium')
+        setQaGoal('Learn')
+        showToast('Timeline block updated', 'info')
+      }
+
+      if (!editingBlock.persisted || !editingBlock.planId) {
+        applyLocalUpdate()
+        return
+      }
+
+      setSaving(true)
+      const subj = subjects.find(s => s.id === sid)
+      if (!subj?.dbId) {
+        setSaving(false)
+        showToast('Could not resolve subject for update', 'warning')
+        return
+      }
+
+      fetch('/api/plans', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          plan_id: editingBlock.planId,
+          topic_id: subj.dbId,
+          target_duration: qaDur,
+          time_slot: qaTime,
+          plan_date: editingBlock.planDate || today,
+        }),
+      })
+        .then(async (res) => {
+          const payload = await res.json().catch(() => null)
+          if (!res.ok) {
+            throw new Error(payload?.error || `Update failed (${res.status})`)
+          }
+          applyLocalUpdate()
+        })
+        .catch((error) => {
+          showToast(error instanceof Error ? error.message : 'Failed to update block', 'warning')
+        })
+        .finally(() => setSaving(false))
+
+      return
+    }
+
     const sid = qaSubject || subjects[0]?.id
     if (!sid) { showToast('No subjects — add one first', 'warning'); return }
     if (planBlocks.find(b => b.time === qaTime)) { showToast('That slot is already taken!', 'warning'); return }
     setPlanBlocks(prev => [...prev, { id: 'b' + Date.now(), sid, topic: qaTopic, time: qaTime, dur: qaDur, diff: qaDiff, goal: qaGoal, persisted: false }])
     const s = subjects.find(x => x.id === sid)
     showToast(`${s ? s.name : 'Block'} added at ${HLBL[qaTime] || qaTime}!`)
-  }, [qaSubject, qaTopic, qaTime, qaDur, qaDiff, qaGoal, subjects, planBlocks, showToast])
+  }, [editingBlockId, qaSubject, qaTopic, qaTime, qaDur, qaDiff, qaGoal, subjects, planBlocks, showToast])
+
+  const startEditBlock = useCallback((id: string) => {
+    const blk = planBlocks.find(b => b.id === id)
+    if (!blk) return
+    if (blk.logged) {
+      showToast('This session is already logged and cannot be edited', 'warning')
+      return
+    }
+    setEditingBlockId(blk.id)
+    setQaSubject(blk.sid)
+    setQaTopic(blk.topic)
+    setQaTime(blk.time)
+    setQaDur(blk.dur)
+    setQaDiff(blk.diff)
+    setQaGoal(blk.goal)
+  }, [planBlocks, showToast])
 
   /* ── Save plan → POST each block to /api/plans ── */
   const savePlan = useCallback(async () => {
@@ -395,6 +484,11 @@ export function PlannerPage() {
                           <div className="pb-subj" style={{ color: c.hex, display: 'inline-flex', alignItems: 'center', gap: 6 }}><BookIcon width={14} height={14} />{s.name}</div>
                           <div className="pb-meta">{blk.topic || 'General study'} · {blk.dur}min · {blk.diff}</div>
                         </div>
+                        {blk.logged ? (
+                          <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 999, background: 'var(--sage-light)', color: 'var(--sage)', border: '1px solid rgba(107,155,122,.4)' }}>Logged</span>
+                        ) : (
+                          <button className="btn-secondary btn-sm" style={{ padding: '4px 8px' }} onClick={() => startEditBlock(blk.id)}>Edit</button>
+                        )}
                         <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 999, background: c.light, color: c.hex, border: `1px solid ${c.hex}` }}>{blk.goal}</span>
                         <button className="pb-remove" onClick={() => removeBlock(blk.id)}>✕</button>
                       </div>
@@ -422,7 +516,7 @@ export function PlannerPage() {
         {/* Right Panel */}
         <div className="planner-sidebar">
           <div className="ps-form">
-            <div className="section-title">Quick Add Block</div>
+            <div className="section-title">{editingBlockId ? 'Edit Timeline Block' : 'Quick Add Block'}</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div className="form-group">
                 <label className="form-label">Subject</label>
@@ -459,7 +553,16 @@ export function PlannerPage() {
                   </select>
                 </div>
               </div>
-              <button className="btn-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={addBlockFromForm}>Add to Timeline</button>
+              <div style={{ display: 'grid', gridTemplateColumns: editingBlockId ? '1fr 1fr' : '1fr', gap: 8 }}>
+                <button className="btn-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={addBlockFromForm}>
+                  {editingBlockId ? 'Update Block' : 'Add to Timeline'}
+                </button>
+                {editingBlockId && (
+                  <button className="btn-secondary" style={{ width: '100%', justifyContent: 'center' }} onClick={() => setEditingBlockId(null)}>
+                    Cancel Edit
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 

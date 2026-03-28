@@ -46,4 +46,25 @@ export class PlansService {
     if (error) throw new Error(error.message)
     return plan
   }
+
+  static async updatePlan(
+    planId: string,
+    data: { topic_id: string, target_duration: number, time_slot?: string | null, plan_date: string, goal_type?: string | null }
+  ) {
+    const { data: plan, error } = await (await createClient())
+      .from('daily_plan')
+      .update({
+        topic_id: data.topic_id,
+        target_duration: data.target_duration,
+        time_slot: data.time_slot ?? null,
+        plan_date: data.plan_date,
+        goal_type: data.goal_type ?? null,
+      })
+      .eq('plan_id', planId)
+      .select()
+      .single()
+
+    if (error) throw new Error(error.message)
+    return plan
+  }
 }

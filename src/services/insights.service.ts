@@ -8,19 +8,6 @@ export class InsightsService {
     const startIso = startOfDay.toISOString()
 
     const { data, error } = await supabase
-      .from('suggestions')
-      .select('id, user_id, log_id, suggestion_text, suggestion_type, created_at')
-      .eq('user_id', userId)
-      .gte('created_at', startIso)
-      .order('created_at', { ascending: false })
-      .limit(limit)
-
-    if (!error) {
-      return data ?? []
-    }
-
-    // Backward compatibility for alternate singular naming.
-    const fallback = await supabase
       .from('suggestion')
       .select('suggestion_id, user_id, analysis_id, suggestion_text, suggestion_type, created_at')
       .eq('user_id', userId)
@@ -28,11 +15,31 @@ export class InsightsService {
       .order('created_at', { ascending: false })
       .limit(limit)
 
+    if (!error) {
+      return (data ?? []).map((row) => ({
+        id: row.suggestion_id,
+        user_id: row.user_id,
+        log_id: row.analysis_id,
+        suggestion_text: row.suggestion_text,
+        suggestion_type: row.suggestion_type,
+        created_at: row.created_at,
+      }))
+    }
+
+    // Backward compatibility for alternate plural naming.
+    const fallback = await supabase
+      .from('suggestions')
+      .select('id, user_id, log_id, suggestion_text, suggestion_type, created_at')
+      .eq('user_id', userId)
+      .gte('created_at', startIso)
+      .order('created_at', { ascending: false })
+      .limit(limit)
+
     if (fallback.error) throw new Error(fallback.error.message)
     return (fallback.data ?? []).map((row) => ({
-      id: row.suggestion_id,
+      id: row.id,
       user_id: row.user_id,
-      log_id: row.analysis_id,
+      log_id: row.log_id,
       suggestion_text: row.suggestion_text,
       suggestion_type: row.suggestion_type,
       created_at: row.created_at,
@@ -43,18 +50,27 @@ export class InsightsService {
     const supabase = await createClient()
 
     const { data, error } = await supabase
-      .from('suggestions')
-      .select('id, user_id, log_id, suggestion_text, suggestion_type, created_at')
+      .from('suggestion')
+      .select('suggestion_id, user_id, analysis_id, suggestion_text, suggestion_type, created_at')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(limit)
 
-    if (!error) return data ?? []
+    if (!error) {
+      return (data ?? []).map((row) => ({
+        id: row.suggestion_id,
+        user_id: row.user_id,
+        log_id: row.analysis_id,
+        suggestion_text: row.suggestion_text,
+        suggestion_type: row.suggestion_type,
+        created_at: row.created_at,
+      }))
+    }
 
     // Backward compatibility for legacy schema/table naming.
     const legacy = await supabase
-      .from('suggestion')
-      .select('suggestion_id, user_id, analysis_id, suggestion_text, suggestion_type, created_at')
+      .from('suggestions')
+      .select('id, user_id, log_id, suggestion_text, suggestion_type, created_at')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(limit)
@@ -62,9 +78,9 @@ export class InsightsService {
     if (legacy.error) throw new Error(legacy.error.message)
 
     return (legacy.data ?? []).map((row) => ({
-      id: row.suggestion_id,
+      id: row.id,
       user_id: row.user_id,
-      log_id: row.analysis_id,
+      log_id: row.log_id,
       suggestion_text: row.suggestion_text,
       suggestion_type: row.suggestion_type,
       created_at: row.created_at,

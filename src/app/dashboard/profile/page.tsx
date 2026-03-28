@@ -160,12 +160,17 @@ export default function ProfilePage() {
                   Helps the AI engine tailor suggestions.
                 </span>
               </label>
-              <input 
-                className="form-input" 
-                value={examType} 
-                onChange={(e) => setExamType(e.target.value)} 
-                placeholder="E.g. JEE, NEET, USMLE"
-              />
+              <select
+                className="form-select"
+                value={examType}
+                onChange={(e) => setExamType(e.target.value)}
+              >
+                <option value="">-- Select exam goal --</option>
+                <option value="JEE">JEE</option>
+                <option value="NEET">NEET</option>
+                <option value="Boards">Boards</option>
+                <option value="Others">Others</option>
+              </select>
             </div>
             
             <div className="form-group">

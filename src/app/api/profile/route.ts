@@ -1,6 +1,37 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
+const VALID_EXAM_TYPES = new Set(['JEE', 'NEET', 'Boards', 'Others'])
+const VALID_PREFERRED_TIMES = new Set(['Morning', 'Afternoon', 'Evening', 'Night'])
+
+function normalizeExamType(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const raw = value.trim()
+  if (!raw) return null
+
+  const lower = raw.toLowerCase()
+  if (lower === 'jee') return 'JEE'
+  if (lower === 'neet') return 'NEET'
+  if (lower === 'boards' || lower === 'board') return 'Boards'
+  if (lower === 'others' || lower === 'other') return 'Others'
+
+  return VALID_EXAM_TYPES.has(raw) ? raw : 'Others'
+}
+
+function normalizePreferredTime(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const raw = value.trim()
+  if (!raw) return null
+
+  const lower = raw.toLowerCase()
+  if (lower === 'morning') return 'Morning'
+  if (lower === 'afternoon') return 'Afternoon'
+  if (lower === 'evening') return 'Evening'
+  if (lower === 'night') return 'Night'
+
+  return VALID_PREFERRED_TIMES.has(raw) ? raw : null
+}
+
 export async function GET() {
   try {
     const supabase = await createClient()
@@ -76,6 +107,8 @@ export async function PUT(request: Request) {
     const { name, exam_type, preferred_time } = await request.json()
     const normalizedName = (name || '').trim() || user.user_metadata?.name || user.email?.split('@')[0] || 'User'
     const normalizedEmail = user.email || `${user.id}@local.invalid`
+    const normalizedExamType = normalizeExamType(exam_type)
+    const normalizedPreferredTime = normalizePreferredTime(preferred_time)
 
     // Keep both metadata keys in sync so all auth providers resolve the same display name.
     if (normalizedName) {
@@ -90,8 +123,8 @@ export async function PUT(request: Request) {
           user_id: user.id,
           email: normalizedEmail,
           name: normalizedName,
-          exam_type,
-          preferred_study_time: preferred_time || null,
+          exam_type: normalizedExamType,
+          preferred_study_time: normalizedPreferredTime,
         }],
         { onConflict: 'user_id' }
       )

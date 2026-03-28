@@ -320,7 +320,43 @@ function useCharts(
 
       if (focusTimeRef.current) {
         destroyExistingOnCanvas(focusTimeRef.current, Chart)
-        weekCharts.push(new Chart(focusTimeRef.current, { type: 'line', data: { labels: weekLabels, datasets: [{ label: 'Avg Focus', data: avgFocusData, borderColor: '#D4A843', backgroundColor: 'rgba(212,168,67,.12)', tension: .4, fill: true, pointBackgroundColor: '#D4A843', pointRadius: 4 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { font: CHART_FONT }, grid: { display: false } }, y: { min: 0, max: 5, ticks: { font: CHART_FONT, stepSize: 1 }, grid: { color: 'rgba(100,80,50,.06)' } } } } }))
+        weekCharts.push(new Chart(focusTimeRef.current, {
+          type: 'line',
+          data: {
+            labels: weekLabels,
+            datasets: [{
+              label: 'Avg Focus',
+              data: avgFocusData,
+              borderColor: '#D4A843',
+              backgroundColor: 'rgba(212,168,67,.12)',
+              tension: .4,
+              fill: true,
+              pointBackgroundColor: '#D4A843',
+              pointRadius: 4,
+              pointHoverRadius: 5,
+              clip: false,
+            }],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            layout: { padding: { top: 8, right: 10, bottom: 6, left: 4 } },
+            plugins: { legend: { display: false } },
+            scales: {
+              x: {
+                offset: true,
+                ticks: { font: CHART_FONT, padding: 8 },
+                grid: { display: false },
+              },
+              y: {
+                min: 0,
+                max: 5,
+                ticks: { font: CHART_FONT, stepSize: 1, padding: 6 },
+                grid: { color: 'rgba(100,80,50,.06)' },
+              },
+            },
+          },
+        }))
       }
     }
 
