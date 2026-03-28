@@ -9,6 +9,7 @@ import { InsightCard } from '@/components/dashboard/InsightCard'
 import { TodayPlanCard } from '@/components/dashboard/TodayPlanCard'
 import { BurnoutMonitor } from '@/components/dashboard/BurnoutMonitor'
 import { AnalyticsIcon, BookIcon, BrainIcon, SparklesIcon, TargetIcon } from '@/components/ui/AppIcons'
+import { formatPlanScheduleLabel, getPlanSortMinutes } from '@/lib/planTimeLabel'
 
 type StudyLog = {
   plan_id?: string
@@ -43,7 +44,7 @@ export default function DashboardPage() {
   /* ── 2. Calculate Today's Plans ── */
   const todayPlans = plans.filter(p => p.plan_date === todayDate)
   const TODAY_SLOTS = todayPlans
-    .sort((a,b) => (a.time_slot || '').localeCompare(b.time_slot || ''))
+    .sort((a,b) => getPlanSortMinutes(a) - getPlanSortMinutes(b))
     .map(p => {
       const log = typedLogs.find((l) => l.plan_id === p.plan_id)
       let status: 'upcoming' | 'inprogress' | 'done' = 'upcoming'
@@ -51,7 +52,7 @@ export default function DashboardPage() {
         status = log.end_time ? 'done' : 'inprogress'
       }
       return {
-        time: p.time_slot || 'Anytime',
+        time: formatPlanScheduleLabel(p),
         subject: p.studyTopic?.subject?.subject_name || 'Subject',
         topic: p.studyTopic?.topic_name || 'Topic',
         duration: p.target_duration,

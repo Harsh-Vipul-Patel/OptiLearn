@@ -7,7 +7,7 @@ import { usePlans } from '@/hooks/usePlans'
 import { useToast } from '@/components/ui/Toast'
 import { Badge } from '@/components/ui/Badge'
 import { BookIcon, FocusIcon, LaptopIcon, PhoneIcon, SparklesIcon, VolumeIcon } from '@/components/ui/AppIcons'
-import type { PlanWithDetails } from '@/hooks/usePlans'
+import { formatPlanScheduleLabel } from '@/lib/planTimeLabel'
 
 const DISTRACTIONS = [
   { key: 'phone', label: 'Phone', icon: <PhoneIcon width={14} height={14} /> },
@@ -18,41 +18,14 @@ const DISTRACTIONS = [
   { key: 'social-media', label: 'Social Media', icon: <LaptopIcon width={14} height={14} /> },
 ]
 
-function parseTimeToMinutes(value?: string | null): number | null {
-  if (!value) return null
-  const timePart = value.includes('T') ? value.split('T')[1] : value
-  const normalized = (timePart || '').slice(0, 5)
-  const [hh, mm] = normalized.split(':').map(Number)
-  if (!Number.isFinite(hh) || !Number.isFinite(mm)) return null
-  return hh * 60 + mm
+function formatLocalTime(date: Date | null): string {
+  if (!date || Number.isNaN(date.getTime())) return '--:--'
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
 }
 
-function formatMinutesToTime(minutes: number): string {
-  const h24 = Math.floor(minutes / 60) % 24
-  const mm = minutes % 60
-  const h12 = h24 % 12 === 0 ? 12 : h24 % 12
-  const ampm = h24 < 12 ? 'AM' : 'PM'
-  return `${h12}:${String(mm).padStart(2, '0')} ${ampm}`
-}
-
-function getSlotFromMinutes(minutes: number): 'Morning' | 'Afternoon' | 'Evening' | 'Night' {
-  if (minutes >= 4 * 60 && minutes < 11 * 60) return 'Morning'
-  if (minutes >= 11 * 60 && minutes < 16 * 60) return 'Afternoon'
-  if (minutes >= 16 * 60 && minutes < 20 * 60) return 'Evening'
-  return 'Night'
-}
-
-function getPlanScheduleLabel(plan: PlanWithDetails): string {
-  const startMinutes = parseTimeToMinutes(plan.start_time)
-  const endMinutes = parseTimeToMinutes(plan.end_time)
-
-  if (startMinutes != null && endMinutes != null && endMinutes > startMinutes) {
-    const slot = getSlotFromMinutes(startMinutes)
-    return `${formatMinutesToTime(startMinutes)} - ${formatMinutesToTime(endMinutes)} (${slot})`
-  }
-
-  if (plan.time_slot) return plan.time_slot
-  return 'Anytime'
+function getAmPm(date: Date | null): 'AM' | 'PM' {
+  if (!date || Number.isNaN(date.getTime())) return 'AM'
+  return date.getHours() < 12 ? 'AM' : 'PM'
 }
 
 export function LoggerPage() {
@@ -240,7 +213,7 @@ export function LoggerPage() {
                   <option value="">— Select a plan —</option>
                   {plans.map(p => (
                     <option key={p.plan_id} value={p.plan_id}>
-                      {p.studyTopic?.subject?.subject_name ?? '?'} · {p.studyTopic?.topic_name ?? '?'} ({p.target_duration} min @ {getPlanScheduleLabel(p)})
+                      {p.studyTopic?.subject?.subject_name ?? '?'} · {p.studyTopic?.topic_name ?? '?'} ({p.target_duration} min @ {formatPlanScheduleLabel(p)})
                     </option>
                   ))}
                 </select>
@@ -335,14 +308,14 @@ export function LoggerPage() {
             <div style={{ color: 'var(--text-soft)', fontSize: 13, fontStyle: 'italic', padding: '12px 0' }}>No sessions match current filters.</div>
           ) : (
             filteredLogs.slice(0, 12).map((log, i) => {
-              const start = String(log.start_time || '').slice(11, 16)
               const startedAt = log.start_time ? new Date(String(log.start_time)) : null
+              const start = formatLocalTime(startedAt)
               const sessionDate = startedAt && !Number.isNaN(startedAt.getTime())
                 ? startedAt.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' })
                 : 'Unknown date'
               const subjectName = getSubjectName(log)
-              const end = String(log.end_time || '').slice(11, 16)
               const endedAt = log.end_time ? new Date(String(log.end_time)) : null
+              const end = formatLocalTime(endedAt)
               const durationMin = startedAt && endedAt && !Number.isNaN(startedAt.getTime()) && !Number.isNaN(endedAt.getTime())
                 ? Math.max(0, Math.round((endedAt.getTime() - startedAt.getTime()) / 60000))
                 : null
@@ -363,7 +336,7 @@ export function LoggerPage() {
                 >
                   <div className="logger-time-col" style={{ minWidth: 50, textAlign: 'center' }}>
                     <div className="log-time">{start.slice(0, 2)}</div>
-                    <div className="log-ampm">{Number(start.slice(0, 2)) < 12 ? 'AM' : 'PM'}</div>
+                    <div className="log-ampm">{getAmPm(startedAt)}</div>
                   </div>
                   <div className="logger-content-col" style={{ flex: 1 }}>
                     <div className="log-title">{String(log.reflection || '—').slice(0, 60) || 'Study session'}</div>

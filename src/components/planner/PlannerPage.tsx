@@ -6,6 +6,7 @@ import { useSuggestionsSync } from '@/hooks/useStudyLogSync'
 import { useSession } from '@/components/Providers'
 import Link from 'next/link'
 import { BookIcon, SparklesIcon, TargetIcon, TrashIcon } from '@/components/ui/AppIcons'
+import { formatPlanScheduleLabel } from '@/lib/planTimeLabel'
 
 /* ── Types ── */
 interface SubjectColor { hex: string; light: string }
@@ -23,6 +24,7 @@ const PALETTE: SubjectColor[] = [
 ]
 
 const SUBJECT_COLORS_KEY = 'planner.subjectColors.v1'
+const SLOT_PREFS_KEY_PREFIX = 'planner.slotRanges.v1.'
 
 function getColorByHex(hex?: string | null): SubjectColor | undefined {
   if (!hex) return undefined
@@ -66,41 +68,98 @@ function paletteColorFromSeed(seed: string): SubjectColor {
 }
 
 const TIME_SLOTS = ['Morning', 'Afternoon', 'Evening', 'Night'] as const
-const SLOT_LABEL: Record<string, string> = {
-  Morning: 'Morning  (4 AM – 11 AM)',
-  Afternoon: 'Afternoon  (11 AM – 4 PM)',
-  Evening: 'Evening  (4 PM – 8 PM)',
-  Night: 'Night  (8 PM – 4 AM)',
+type SlotName = typeof TIME_SLOTS[number]
+type SlotRange = { start: number; end: number }
+type SlotRanges = Record<SlotName, SlotRange>
+
+const DEFAULT_SLOT_RANGES: SlotRanges = {
+  Morning: { start: 4 * 60, end: 11 * 60 },
+  Afternoon: { start: 11 * 60, end: 16 * 60 },
+  Evening: { start: 16 * 60, end: 20 * 60 },
+  Night: { start: 20 * 60, end: 4 * 60 },
 }
-const SLOT_START_MINUTES: Record<string, number> = {
-  Morning: 4 * 60,    // 4:00 AM
-  Afternoon: 11 * 60, // 11:00 AM
-  Evening: 16 * 60,   // 4:00 PM
-  Night: 20 * 60,     // 8:00 PM
+
+function cloneDefaultSlotRanges(): SlotRanges {
+  return {
+    Morning: { ...DEFAULT_SLOT_RANGES.Morning },
+    Afternoon: { ...DEFAULT_SLOT_RANGES.Afternoon },
+    Evening: { ...DEFAULT_SLOT_RANGES.Evening },
+    Night: { ...DEFAULT_SLOT_RANGES.Night },
+  }
 }
-const SLOT_END_MINUTES: Record<string, number> = {
-  Morning: 11 * 60,   // 11:00 AM
-  Afternoon: 16 * 60, // 4:00 PM
-  Evening: 20 * 60,   // 8:00 PM
-  Night: 28 * 60,     // 4:00 AM next day (24+4)
+
+function minutesToClock(totalMinutes: number): string {
+  const normalized = ((totalMinutes % 1440) + 1440) % 1440
+  const h24 = Math.floor(normalized / 60)
+  const m = normalized % 60
+  return `${String(h24).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+}
+
+function minutesToAmPm(totalMinutes: number): string {
+  const normalized = ((totalMinutes % 1440) + 1440) % 1440
+  const h24 = Math.floor(normalized / 60)
+  const m = normalized % 60
+  const h12 = h24 % 12 || 12
+  const ampm = h24 < 12 ? 'AM' : 'PM'
+  return `${h12}:${String(m).padStart(2, '0')} ${ampm}`
+}
+
+function getSlotLabel(slot: SlotName, ranges: SlotRanges): string {
+  const range = ranges[slot]
+  return `${slot}  (${minutesToAmPm(range.start)} - ${minutesToAmPm(range.end)})`
+}
+
+function getSlotPrefsKey(userId?: string | null): string {
+  return `${SLOT_PREFS_KEY_PREFIX}${userId || 'anonymous'}`
+}
+
+function getStoredSlotRanges(userId?: string | null): SlotRanges {
+  if (typeof window === 'undefined') return cloneDefaultSlotRanges()
+  try {
+    const raw = window.localStorage.getItem(getSlotPrefsKey(userId))
+    if (!raw) return cloneDefaultSlotRanges()
+    const parsed = JSON.parse(raw) as Partial<Record<SlotName, Partial<SlotRange>>> | null
+    if (!parsed) return cloneDefaultSlotRanges()
+
+    const merged = cloneDefaultSlotRanges()
+    for (const slot of TIME_SLOTS) {
+      const start = Number(parsed[slot]?.start)
+      const end = Number(parsed[slot]?.end)
+      if (Number.isFinite(start) && Number.isFinite(end)) {
+        merged[slot] = { start, end }
+      }
+    }
+    return merged
+  } catch {
+    return cloneDefaultSlotRanges()
+  }
+}
+
+function saveStoredSlotRanges(userId: string | undefined, ranges: SlotRanges) {
+  if (typeof window === 'undefined') return
+  window.localStorage.setItem(getSlotPrefsKey(userId), JSON.stringify(ranges))
 }
 
 /** Determine which slot a time (in minutes from midnight) belongs to */
-function getSlotForMinutes(minutes: number): string {
-  // Night wraps: 8PM (1200) – 4AM (240 next day)
-  // Treat 0:00–3:59 as Night (previous day continuation)
-  if (minutes < 4 * 60) return 'Night'
-  if (minutes < 11 * 60) return 'Morning'
-  if (minutes < 16 * 60) return 'Afternoon'
-  if (minutes < 20 * 60) return 'Evening'
-  return 'Night'
+function isMinuteInRange(minutes: number, start: number, end: number): boolean {
+  if (start === end) return true
+  if (start < end) return minutes >= start && minutes < end
+  return minutes >= start || minutes < end
+}
+
+function getSlotForMinutes(minutes: number, ranges: SlotRanges): SlotName {
+  for (const slot of TIME_SLOTS) {
+    const range = ranges[slot]
+    if (isMinuteInRange(minutes, range.start, range.end)) return slot
+  }
+  return 'Morning'
 }
 
 /** Determine which slot a block belongs to based on its startTime */
-function getBlockSlot(block: PlanBlock): string {
+function getBlockSlot(block: PlanBlock, ranges: SlotRanges): string {
   if (block.startTime) {
     const mins = timeToMinutes(block.startTime)
-    if (mins !== null) return getSlotForMinutes(mins)
+    if (mins !== null) return getSlotForMinutes(mins, ranges)
   }
   // Fallback to the stored time_slot
   return block.time
@@ -108,19 +167,13 @@ function getBlockSlot(block: PlanBlock): string {
 
 const today = new Date().toISOString().slice(0, 10)
 
-function formatSessionRange(slot: string, durationMin: number) {
-  const startMin = SLOT_START_MINUTES[slot]
+function formatSessionRange(slot: string, durationMin: number, ranges: SlotRanges) {
+  const typedSlot = (TIME_SLOTS.find(s => s === slot) ?? 'Morning') as SlotName
+  const startMin = ranges[typedSlot].start
   if (!Number.isFinite(startMin)) return ''
   const endMin = startMin + Math.max(0, Number(durationMin || 0))
 
-  const fmt = (total: number) => {
-    const h24 = Math.floor(total / 60) % 24
-    const m = total % 60
-    const h12 = h24 % 12 || 12
-    return `${h12}:${String(m).padStart(2, '0')}`
-  }
-
-  return `${fmt(startMin)}-${fmt(endMin)}`
+  return `${minutesToAmPm(startMin)}-${minutesToAmPm(endMin)}`
 }
 
 function timeToMinutes(time: string): number | null {
@@ -141,7 +194,7 @@ function checkTimeOverlap(
   return startTime1 < endTime2 && startTime2 < endTime1
 }
 
-function getBlockTimeRange(block: PlanBlock): { start: number; end: number } | null {
+function getBlockTimeRange(block: PlanBlock, ranges: SlotRanges): { start: number; end: number } | null {
   if (block.startTime && block.endTime) {
     const start = timeToMinutes(block.startTime)
     const end = timeToMinutes(block.endTime)
@@ -150,51 +203,14 @@ function getBlockTimeRange(block: PlanBlock): { start: number; end: number } | n
     }
   }
   
-  const slotStart = SLOT_START_MINUTES[block.time]
+  const slotName = (TIME_SLOTS.find(s => s === block.time) ?? 'Morning') as SlotName
+  const slotStart = ranges[slotName].start
   if (Number.isFinite(slotStart)) {
     return {
       start: slotStart,
       end: slotStart + block.dur,
     }
   }
-  return null
-}
-
-// Find next available time in a slot that doesn't conflict with existing sessions
-function findNextAvailableTimeInSlot(
-  slot: string,
-  duration: number,
-  planBlocks: PlanBlock[]
-): { start: number; end: number } | null {
-  const slotStart = SLOT_START_MINUTES[slot]
-  const slotEnd = SLOT_END_MINUTES[slot]
-  if (!Number.isFinite(slotStart) || !Number.isFinite(slotEnd)) return null
-
-  // Get all conflicts in this slot
-  const conflicts = planBlocks
-    .map(b => getBlockTimeRange(b))
-    .filter((range): range is { start: number; end: number } => range !== null)
-    .sort((a, b) => a.start - b.start)
-
-  // Try to fit session starting from slot beginning
-  let tryStart = slotStart
-  
-  for (const conflict of conflicts) {
-    // Check if current try time fits before this conflict
-    const tryEnd = tryStart + duration
-    if (tryEnd <= conflict.start) {
-      return { start: tryStart, end: tryEnd }
-    }
-    // Move try time to after this conflict
-    tryStart = conflict.end
-  }
-
-  // Try fitting after all conflicts
-  const tryEnd = tryStart + duration
-  if (tryEnd <= slotEnd) {
-    return { start: tryStart, end: tryEnd }
-  }
-
   return null
 }
 
@@ -208,21 +224,31 @@ export function PlannerPage() {
   const [subjectsLoading, setSubjectsLoading] = useState(true)
   const [planBlocks, setPlanBlocks] = useState<PlanBlock[]>([])
   const [saving, setSaving] = useState(false)
-  const [dragSid, setDragSid] = useState<string | null>(null)
   const [selColor, setSelColor] = useState<SubjectColor>(PALETTE[0])
   const [newName, setNewName] = useState('')
   const [qaSubject, setQaSubject] = useState('')
   const [qaTopic, setQaTopic] = useState('')
-  const [qaTime, setQaTime] = useState('Morning')
+  const [qaTime, setQaTime] = useState<SlotName>('Morning')
   const [qaUseCustomTime, setQaUseCustomTime] = useState(false)
   const [qaStartTime, setQaStartTime] = useState('09:00')
   const [qaEndTime, setQaEndTime] = useState('10:00')
   const [qaDur, setQaDur] = useState(60)
   const [qaDiff, setQaDiff] = useState('Medium')
   const [qaGoal, setQaGoal] = useState('Learn')
-  const [dragOverSlot, setDragOverSlot] = useState<string | null>(null)
   const [editingBlockId, setEditingBlockId] = useState<string | null>(null)
-  const [dragDropPending, setDragDropPending] = useState<{ sid: string; slot: string } | null>(null)
+  const [slotPulse, setSlotPulse] = useState<string | null>(null)
+  const [slotRanges, setSlotRanges] = useState<SlotRanges>(() => cloneDefaultSlotRanges())
+  const [showSlotEditor, setShowSlotEditor] = useState(false)
+  const [slotDraft, setSlotDraft] = useState<Record<SlotName, { start: string; end: string }>>(() => ({
+    Morning: { start: minutesToClock(DEFAULT_SLOT_RANGES.Morning.start), end: minutesToClock(DEFAULT_SLOT_RANGES.Morning.end) },
+    Afternoon: { start: minutesToClock(DEFAULT_SLOT_RANGES.Afternoon.start), end: minutesToClock(DEFAULT_SLOT_RANGES.Afternoon.end) },
+    Evening: { start: minutesToClock(DEFAULT_SLOT_RANGES.Evening.start), end: minutesToClock(DEFAULT_SLOT_RANGES.Evening.end) },
+    Night: { start: minutesToClock(DEFAULT_SLOT_RANGES.Night.start), end: minutesToClock(DEFAULT_SLOT_RANGES.Night.end) },
+  }))
+
+  useEffect(() => {
+    setSlotRanges(getStoredSlotRanges(session?.user?.id))
+  }, [session?.user?.id])
 
   /* ── Load subjects from DB on mount ── */
   useEffect(() => {
@@ -267,14 +293,18 @@ export function PlannerPage() {
             const studyTopic = p.studyTopic as Record<string, unknown> | undefined
             const subject = studyTopic?.subject as Record<string, unknown> | undefined
             const subj = loadedSubjects.find(s => s.dbId === String(subject?.subject_id || ''))
+            const startTime = p.start_time ? String(p.start_time).slice(0, 5) : undefined
+            const endTime = p.end_time ? String(p.end_time).slice(0, 5) : undefined
+            const rawSlot = String(p.time_slot || 'Morning')
+            const normalizedSlot = (TIME_SLOTS.find((slot) => slot === rawSlot) ?? 'Morning') as SlotName
             return {
               id: 'b' + String(p.plan_id),
               planId: String(p.plan_id),
               sid: subj?.id || '',
               topic: String(studyTopic?.topic_name || ''),
-              time: String(p.time_slot || 'Morning'),
-              startTime: p.start_time ? String(p.start_time).slice(0, 5) : undefined,
-              endTime: p.end_time ? String(p.end_time).slice(0, 5) : undefined,
+              time: normalizedSlot,
+              startTime,
+              endTime,
               dur: Number(p.target_duration || 0),
               diff: String(studyTopic?.complexity || 'Medium'),
               goal: 'Learn',
@@ -353,43 +383,84 @@ export function PlannerPage() {
   ): boolean => {
     return planBlocks.some(block => {
       if (excludeBlockId && block.id === excludeBlockId) return false
-      const existing = getBlockTimeRange(block)
+      const existing = getBlockTimeRange(block, slotRanges)
       if (!existing) return false
       return checkTimeOverlap(newStartTime, newEndTime, existing.start, existing.end)
     })
-  }, [planBlocks])
+  }, [planBlocks, slotRanges])
 
-  /* ── Drag & drop plan blocks (local state only) ── */
-  const doDropBlock = useCallback((sid: string, slot: string) => {
-    // Find next available time in this slot
-    const availableTime = findNextAvailableTimeInSlot(slot, 60, planBlocks)
-    
-    if (!availableTime) {
-      showToast('No available time in this slot for a 1-hour session', 'warning')
-      return
+  const openSlotEditor = useCallback(() => {
+    setSlotDraft({
+      Morning: { start: minutesToClock(slotRanges.Morning.start), end: minutesToClock(slotRanges.Morning.end) },
+      Afternoon: { start: minutesToClock(slotRanges.Afternoon.start), end: minutesToClock(slotRanges.Afternoon.end) },
+      Evening: { start: minutesToClock(slotRanges.Evening.start), end: minutesToClock(slotRanges.Evening.end) },
+      Night: { start: minutesToClock(slotRanges.Night.start), end: minutesToClock(slotRanges.Night.end) },
+    })
+    setShowSlotEditor(true)
+  }, [slotRanges])
+
+  const saveSlotPreferences = useCallback(() => {
+    const nextRanges = cloneDefaultSlotRanges()
+
+    for (const slot of TIME_SLOTS) {
+      const startMin = timeToMinutes(slotDraft[slot].start)
+      const endMin = timeToMinutes(slotDraft[slot].end)
+      if (startMin == null || endMin == null) {
+        showToast(`Invalid ${slot} time. Use HH:MM format.`, 'warning')
+        return
+      }
+      if (startMin === endMin) {
+        showToast(`${slot} start and end cannot be the same.`, 'warning')
+        return
+      }
+      nextRanges[slot] = { start: startMin, end: endMin }
     }
-    
-    // Populate the form with the dropped subject and slot
-    setQaSubject(sid)
-    setQaTime(slot)
-    setQaUseCustomTime(true)
-    
-    // Set start and end times based on the available slot
-    const startTime = Math.floor(availableTime.start / 60)
-    const startMinute = availableTime.start % 60
-    const endTime = Math.floor(availableTime.end / 60)
-    const endMinute = availableTime.end % 60
-    
-    setQaStartTime(`${String(startTime).padStart(2, '0')}:${String(startMinute).padStart(2, '0')}`)
-    setQaEndTime(`${String(endTime).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}`)
-    
-    setQaTopic('')
-    setQaDiff('Medium')
-    setQaGoal('Learn')
-    setDragDropPending({ sid, slot })
-    
-    showToast(`Session scheduled for ${String(startTime).padStart(2, '0')}:${String(startMinute).padStart(2, '0')}-${String(endTime).padStart(2, '0')}:${String(endMinute).padStart(2, '0')}. Add topic →`, 'info')
-  }, [planBlocks, showToast])
+
+    setSlotRanges(nextRanges)
+    saveStoredSlotRanges(session?.user?.id, nextRanges)
+    setShowSlotEditor(false)
+    showToast('Timeline slot timings updated', 'info')
+  }, [session?.user?.id, showToast, slotDraft])
+
+  const animateSubjectToSlot = useCallback((sid: string, slot: string) => {
+    if (typeof window === 'undefined') return
+
+    const subjectEl = document.querySelector(`[data-subject-id="${sid}"]`) as HTMLElement | null
+    const slotEl = document.querySelector(`[data-slot-id="${slot}"]`) as HTMLElement | null
+    if (!subjectEl || !slotEl) return
+
+    const subjectRect = subjectEl.getBoundingClientRect()
+    const slotRect = slotEl.getBoundingClientRect()
+    const clone = subjectEl.cloneNode(true) as HTMLElement
+
+    clone.style.position = 'fixed'
+    clone.style.left = `${subjectRect.left}px`
+    clone.style.top = `${subjectRect.top}px`
+    clone.style.width = `${subjectRect.width}px`
+    clone.style.height = `${subjectRect.height}px`
+    clone.style.margin = '0'
+    clone.style.zIndex = '9999'
+    clone.style.pointerEvents = 'none'
+    clone.style.transition = 'transform 520ms cubic-bezier(.2,.8,.2,1), opacity 520ms ease'
+    clone.style.transformOrigin = 'center center'
+    document.body.appendChild(clone)
+
+    const targetX = slotRect.left + Math.min(slotRect.width * 0.25, 120)
+    const targetY = slotRect.top + 40
+    const dx = targetX - subjectRect.left
+    const dy = targetY - subjectRect.top
+
+    requestAnimationFrame(() => {
+      clone.style.transform = `translate(${dx}px, ${dy}px) scale(0.88)`
+      clone.style.opacity = '0.12'
+    })
+
+    setTimeout(() => {
+      clone.remove()
+      setSlotPulse(slot)
+      setTimeout(() => setSlotPulse((prev) => (prev === slot ? null : prev)), 700)
+    }, 560)
+  }, [])
 
   const addBlockFromForm = useCallback(() => {
     const editingBlock = editingBlockId ? planBlocks.find(b => b.id === editingBlockId) : null
@@ -424,7 +495,7 @@ export function PlannerPage() {
         newStartMin = startMin
         newEndMin = endMin
       } else {
-        const slotStart = SLOT_START_MINUTES[qaTime]
+        const slotStart = slotRanges[qaTime as SlotName]?.start
         if (!Number.isFinite(slotStart)) {
           showToast('Invalid time slot', 'warning')
           return
@@ -440,13 +511,14 @@ export function PlannerPage() {
       }
 
       const applyLocalUpdate = () => {
+        const updatedSlot = qaUseCustomTime ? getSlotForMinutes(newStartMin, slotRanges) : qaTime
         setPlanBlocks(prev => prev.map(b => (
           b.id === editingBlock.id
             ? { 
                 ...b, 
                 sid, 
                 topic: qaTopic, 
-                time: qaTime, 
+                time: updatedSlot,
                 startTime: qaUseCustomTime ? qaStartTime : undefined,
                 endTime: qaUseCustomTime ? qaEndTime : undefined,
                 dur: qaUseCustomTime ? (newEndMin - newStartMin) : qaDur, 
@@ -526,7 +598,7 @@ export function PlannerPage() {
       newEndMin = endMin
       duration = newEndMin - newStartMin
     } else {
-      const slotStart = SLOT_START_MINUTES[qaTime]
+      const slotStart = slotRanges[qaTime as SlotName]?.start
       if (!Number.isFinite(slotStart)) {
         showToast('Invalid time slot', 'warning')
         return
@@ -546,7 +618,7 @@ export function PlannerPage() {
       id: 'b' + Date.now(), 
       sid, 
       topic: qaTopic, 
-      time: qaTime, 
+      time: qaUseCustomTime ? getSlotForMinutes(newStartMin, slotRanges) : qaTime,
       startTime: qaUseCustomTime ? qaStartTime : undefined,
       endTime: qaUseCustomTime ? qaEndTime : undefined,
       dur: duration, 
@@ -556,8 +628,10 @@ export function PlannerPage() {
     }])
     const s = subjects.find(x => x.id === sid)
     showToast(`${s ? s.name : 'Block'} added!`)
+    const targetSlot = qaUseCustomTime ? getSlotForMinutes(newStartMin, slotRanges) : qaTime
+    setTimeout(() => animateSubjectToSlot(sid, targetSlot), 80)
     resetFormFields()
-  }, [editingBlockId, qaSubject, qaTopic, qaTime, qaUseCustomTime, qaStartTime, qaEndTime, qaDur, qaDiff, qaGoal, subjects, hasTimeConflict, showToast])
+  }, [editingBlockId, qaSubject, qaTopic, qaTime, qaUseCustomTime, qaStartTime, qaEndTime, qaDur, qaDiff, qaGoal, subjects, hasTimeConflict, showToast, animateSubjectToSlot, slotRanges])
 
   const resetFormFields = useCallback(() => {
     setQaTopic('')
@@ -568,7 +642,6 @@ export function PlannerPage() {
     setQaDur(60)
     setQaDiff('Medium')
     setQaGoal('Learn')
-    setDragDropPending(null)
   }, [])
 
   const startEditBlock = useCallback((id: string) => {
@@ -581,7 +654,7 @@ export function PlannerPage() {
     setEditingBlockId(blk.id)
     setQaSubject(blk.sid)
     setQaTopic(blk.topic)
-    setQaTime(blk.time)
+    setQaTime((TIME_SLOTS.find((slot) => slot === blk.time) ?? 'Morning') as SlotName)
     
     if (blk.startTime && blk.endTime) {
       setQaUseCustomTime(true)
@@ -670,13 +743,14 @@ export function PlannerPage() {
   }, [planBlocks, subjects, showToast])
 
   const totalHours = (planBlocks.reduce((a, b) => a + b.dur, 0) / 60).toFixed(1)
+  const visibleSlots = TIME_SLOTS.filter(slot => planBlocks.some(b => getBlockSlot(b, slotRanges) === slot))
 
   return (
     <div>
       <div className="page-header">
         <div>
           <div className="page-title">Study Planner</div>
-          <div className="page-sub">Drag subject chips into time slots, or use the quick-add form. No two study sessions can overlap. Customize start/end times for precise scheduling.</div>
+          <div className="page-sub">Use quick-add to build your timeline. Set custom slot timings for Morning, Afternoon, Evening, and Night based on your personal routine.</div>
         </div>
         <div className="header-actions">
           <button className="btn-secondary btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={() => { setPlanBlocks([]); showToast('Plan cleared', 'trash') }}><TrashIcon width={15} height={15} />Clear</button>
@@ -691,7 +765,7 @@ export function PlannerPage() {
       <div className="subjects-panel">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 13 }}>
           <div className="section-title" style={{ margin: 0 }}>My Subjects</div>
-          <span style={{ fontSize: '11.5px', color: 'var(--text-soft)', display: 'inline-flex', alignItems: 'center', gap: 5 }}><SparklesIcon width={14} height={14} />Drag a chip → drop on any time slot</span>
+          <span style={{ fontSize: '11.5px', color: 'var(--text-soft)', display: 'inline-flex', alignItems: 'center', gap: 5 }}><SparklesIcon width={14} height={14} />Use Quick Add Block to schedule sessions</span>
         </div>
         <div className="subjects-grid">
           {subjectsLoading ? (
@@ -703,9 +777,7 @@ export function PlannerPage() {
               <div
                 key={s.id}
                 className="subject-chip"
-                draggable
-                onDragStart={e => { setDragSid(s.id); e.dataTransfer.setData('sid', s.id) }}
-                onDragEnd={() => setDragSid(null)}
+                data-subject-id={s.id}
                 style={{ background: s.color.light, borderColor: s.color.hex, color: s.color.hex }}
               >
                 <span className="chip-dot" style={{ background: s.color.hex }} />
@@ -732,38 +804,78 @@ export function PlannerPage() {
         <div className="timeline-area">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
             <div className="section-title" style={{ margin: 0 }}>Today&apos;s Timeline</div>
-            <span className="badge badge-indigo">{planBlocks.length} blocks · {totalHours}h planned</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <button className="btn-secondary btn-sm" onClick={openSlotEditor}>Adjust Slot Timings</button>
+              <span className="badge badge-indigo">{planBlocks.length} blocks · {totalHours}h planned</span>
+            </div>
           </div>
-          <div
-            className={`drop-zone-banner${dragSid ? ' drag-over' : ''}`}
-            onDragOver={e => e.preventDefault()}
-            onDrop={e => {
-              e.preventDefault()
-              const sid = e.dataTransfer.getData('sid') || dragSid
-              if (!sid) return
-              const free = TIME_SLOTS.find(slot => {
-                const start = SLOT_START_MINUTES[slot]
-                return Number.isFinite(start) && !hasTimeConflict(start, start + 60)
-              })
-              if (!free) { showToast('No free time slots available!', 'warning'); return }
-              doDropBlock(sid, free)
-            }}
-          >
-            <div style={{ display: 'inline-flex', marginBottom: 6 }}><TargetIcon width={24} height={24} /></div>
-            Drop a subject chip here → auto-schedules to next available time slot
-          </div>
-          <div>
-            {TIME_SLOTS.map(slot => {
+          {showSlotEditor && (
+            <div className="card" style={{ marginBottom: 12, padding: '14px 16px' }}>
+              <div style={{ fontSize: '13px', fontWeight: 700, marginBottom: 10 }}>Your Slot Preferences</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                {TIME_SLOTS.map((slot) => (
+                  <div key={slot} className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label">{slot}</label>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                      <input
+                        className="form-input"
+                        type="time"
+                        value={slotDraft[slot].start}
+                        onChange={(e) => setSlotDraft((prev) => ({ ...prev, [slot]: { ...prev[slot], start: e.target.value } }))}
+                      />
+                      <input
+                        className="form-input"
+                        type="time"
+                        value={slotDraft[slot].end}
+                        onChange={(e) => setSlotDraft((prev) => ({ ...prev, [slot]: { ...prev[slot], end: e.target.value } }))}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 10 }}>
+                <button className="btn-secondary btn-sm" onClick={() => setShowSlotEditor(false)}>Cancel</button>
+                <button
+                  className="btn-secondary btn-sm"
+                  onClick={() => {
+                    const defaults = cloneDefaultSlotRanges()
+                    setSlotDraft({
+                      Morning: { start: minutesToClock(defaults.Morning.start), end: minutesToClock(defaults.Morning.end) },
+                      Afternoon: { start: minutesToClock(defaults.Afternoon.start), end: minutesToClock(defaults.Afternoon.end) },
+                      Evening: { start: minutesToClock(defaults.Evening.start), end: minutesToClock(defaults.Evening.end) },
+                      Night: { start: minutesToClock(defaults.Night.start), end: minutesToClock(defaults.Night.end) },
+                    })
+                  }}
+                >
+                  Reset Defaults
+                </button>
+                <button className="btn-primary btn-sm" onClick={saveSlotPreferences}>Save Timings</button>
+              </div>
+            </div>
+          )}
+          {visibleSlots.length === 0 ? (
+            <div className="drop-zone-banner" style={{ borderStyle: 'solid' }}>
+              <div style={{ display: 'inline-flex', marginBottom: 6 }}><TargetIcon width={24} height={24} /></div>
+              No timeline sections yet. Add your first session from Quick Add Block.
+            </div>
+          ) : (
+            <div>
+            {visibleSlots.map(slot => {
               const blks = planBlocks
-                .filter(b => getBlockSlot(b) === slot)
+                .filter(b => getBlockSlot(b, slotRanges) === slot)
                 .sort((a, b) => {
-                  const aRange = getBlockTimeRange(a)
-                  const bRange = getBlockTimeRange(b)
+                  const aRange = getBlockTimeRange(a, slotRanges)
+                  const bRange = getBlockTimeRange(b, slotRanges)
                   return (aRange?.start ?? 0) - (bRange?.start ?? 0)
                 })
               return (
-                <div key={slot} className="timeline-slot">
-                  <div className="ts-time">{SLOT_LABEL[slot]}</div>
+                <div
+                  key={slot}
+                  className="timeline-slot"
+                  data-slot-id={slot}
+                  style={slotPulse === slot ? { boxShadow: '0 0 0 2px rgba(201,107,58,.35), 0 10px 24px rgba(0,0,0,.08)' } : undefined}
+                >
+                  <div className="ts-time">{getSlotLabel(slot, slotRanges)}</div>
                   <div className="ts-body" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {blks.length > 0 && (
                       <>
@@ -776,7 +888,7 @@ export function PlannerPage() {
                                 <div className="pb-subj" style={{ color: c.hex, display: 'inline-flex', alignItems: 'center', gap: 6 }}><BookIcon width={14} height={14} />{s?.name || 'Unknown'}</div>
                                 <div className="pb-meta">
                                   {blk.topic || 'General study'} · {blk.dur}min · 
-                                  {blk.startTime && blk.endTime ? `${blk.startTime}-${blk.endTime}` : formatSessionRange(blk.time, blk.dur)} · {blk.diff}
+                                  {formatPlanScheduleLabel({ start_time: blk.startTime, end_time: blk.endTime, time_slot: blk.time }, { durationMin: blk.dur, fallback: formatSessionRange(blk.time, blk.dur, slotRanges) || 'Anytime' })} · {blk.diff}
                                 </div>
                               </div>
                               {blk.logged ? (
@@ -791,37 +903,23 @@ export function PlannerPage() {
                         })}
                       </>
                     )}
-                    <div
-                      className={`ts-empty${dragOverSlot === slot ? ' drag-over' : ''}`}
-                      style={{ display: blks.length > 0 ? 'flex' : undefined, minHeight: blks.length === 0 ? '60px' : 'auto' }}
-                      onDragOver={e => { e.preventDefault(); setDragOverSlot(slot) }}
-                      onDragLeave={() => setDragOverSlot(null)}
-                      onDrop={e => {
-                        e.preventDefault(); setDragOverSlot(null)
-                        const sid = e.dataTransfer.getData('sid') || dragSid
-                        if (sid) doDropBlock(sid, slot)
-                      }}
-                    >
-                      {blks.length === 0 ? 'Drop here or use form →' : '+ Drop another session'}
+                    <div className="ts-empty" style={{ display: blks.length > 0 ? 'flex' : undefined, minHeight: blks.length === 0 ? '60px' : 'auto' }}>
+                      Add more from Quick Add Block →
                     </div>
                   </div>
                 </div>
               )
             })}
-          </div>
+            </div>
+          )}
         </div>
 
         {/* Right Panel */}
         <div className="planner-sidebar">
           <div className="ps-form">
             <div className="section-title">
-              {editingBlockId ? 'Edit Timeline Block' : dragDropPending ? 'Complete Session Details' : 'Quick Add Block'}
+              {editingBlockId ? 'Edit Timeline Block' : 'Quick Add Block'}
             </div>
-            {dragDropPending && (
-              <div style={{ fontSize: '12px', color: 'var(--terra)', fontWeight: 500, padding: '8px 12px', background: 'rgba(209, 107, 58, 0.08)', borderRadius: 'var(--r-sm)', marginBottom: '8px' }}>
-                📌 Subject selected. Fill in topic and adjust times as needed.
-              </div>
-            )}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div className="form-group">
                 <label className="form-label">Subject</label>
@@ -872,8 +970,8 @@ export function PlannerPage() {
                 <>
                   <div className="form-group">
                     <label className="form-label">Time Slot</label>
-                    <select className="form-select" value={qaTime} onChange={e => setQaTime(e.target.value)}>
-                      {TIME_SLOTS.map(slot => <option key={slot} value={slot}>{SLOT_LABEL[slot]}</option>)}
+                    <select className="form-select" value={qaTime} onChange={e => setQaTime(e.target.value as SlotName)}>
+                      {TIME_SLOTS.map(slot => <option key={slot} value={slot}>{getSlotLabel(slot, slotRanges)}</option>)}
                     </select>
                   </div>
                   <div className="form-group">
@@ -904,11 +1002,11 @@ export function PlannerPage() {
                   </select>
                 </div>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: editingBlockId || dragDropPending ? '1fr 1fr' : '1fr', gap: 8 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: editingBlockId ? '1fr 1fr' : '1fr', gap: 8 }}>
                 <button className="btn-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={addBlockFromForm}>
                   {editingBlockId ? 'Update Block' : 'Add to Timeline'}
                 </button>
-                {(editingBlockId || dragDropPending) && (
+                {editingBlockId && (
                   <button 
                     className="btn-secondary" 
                     style={{ width: '100%', justifyContent: 'center' }} 
