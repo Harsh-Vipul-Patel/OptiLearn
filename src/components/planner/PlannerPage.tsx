@@ -67,16 +67,43 @@ function paletteColorFromSeed(seed: string): SubjectColor {
 
 const TIME_SLOTS = ['Morning', 'Afternoon', 'Evening', 'Night'] as const
 const SLOT_LABEL: Record<string, string> = {
-  Morning: 'Morning',
-  Afternoon: 'Afternoon',
-  Evening: 'Evening',
-  Night: 'Night',
+  Morning: 'Morning  (4 AM – 11 AM)',
+  Afternoon: 'Afternoon  (11 AM – 4 PM)',
+  Evening: 'Evening  (4 PM – 8 PM)',
+  Night: 'Night  (8 PM – 4 AM)',
 }
 const SLOT_START_MINUTES: Record<string, number> = {
-  Morning: 9 * 60,
-  Afternoon: 14 * 60,
-  Evening: 18 * 60,
-  Night: 21 * 60,
+  Morning: 4 * 60,    // 4:00 AM
+  Afternoon: 11 * 60, // 11:00 AM
+  Evening: 16 * 60,   // 4:00 PM
+  Night: 20 * 60,     // 8:00 PM
+}
+const SLOT_END_MINUTES: Record<string, number> = {
+  Morning: 11 * 60,   // 11:00 AM
+  Afternoon: 16 * 60, // 4:00 PM
+  Evening: 20 * 60,   // 8:00 PM
+  Night: 28 * 60,     // 4:00 AM next day (24+4)
+}
+
+/** Determine which slot a time (in minutes from midnight) belongs to */
+function getSlotForMinutes(minutes: number): string {
+  // Night wraps: 8PM (1200) – 4AM (240 next day)
+  // Treat 0:00–3:59 as Night (previous day continuation)
+  if (minutes < 4 * 60) return 'Night'
+  if (minutes < 11 * 60) return 'Morning'
+  if (minutes < 16 * 60) return 'Afternoon'
+  if (minutes < 20 * 60) return 'Evening'
+  return 'Night'
+}
+
+/** Determine which slot a block belongs to based on its startTime */
+function getBlockSlot(block: PlanBlock): string {
+  if (block.startTime) {
+    const mins = timeToMinutes(block.startTime)
+    if (mins !== null) return getSlotForMinutes(mins)
+  }
+  // Fallback to the stored time_slot
+  return block.time
 }
 
 const today = new Date().toISOString().slice(0, 10)
@@ -140,17 +167,8 @@ function findNextAvailableTimeInSlot(
   planBlocks: PlanBlock[]
 ): { start: number; end: number } | null {
   const slotStart = SLOT_START_MINUTES[slot]
-  if (!Number.isFinite(slotStart)) return null
-
-  // Slot boundaries (approximate next slot start)
-  const slotEnd = (() => {
-    const slots = ['Morning', 'Afternoon', 'Evening', 'Night']
-    const idx = slots.indexOf(slot)
-    if (idx < slots.length - 1) {
-      return SLOT_START_MINUTES[slots[idx + 1]]
-    }
-    return slotStart + 180 // Default to 3 hours for last slot
-  })()
+  const slotEnd = SLOT_END_MINUTES[slot]
+  if (!Number.isFinite(slotStart) || !Number.isFinite(slotEnd)) return null
 
   // Get all conflicts in this slot
   const conflicts = planBlocks
@@ -255,6 +273,8 @@ export function PlannerPage() {
               sid: subj?.id || '',
               topic: String(studyTopic?.topic_name || ''),
               time: String(p.time_slot || 'Morning'),
+              startTime: p.start_time ? String(p.start_time).slice(0, 5) : undefined,
+              endTime: p.end_time ? String(p.end_time).slice(0, 5) : undefined,
               dur: Number(p.target_duration || 0),
               diff: String(studyTopic?.complexity || 'Medium'),
               goal: 'Learn',
@@ -462,6 +482,8 @@ export function PlannerPage() {
           target_duration: qaUseCustomTime ? (newEndMin - newStartMin) : qaDur,
           time_slot: qaTime,
           plan_date: editingBlock.planDate || today,
+          start_time: qaUseCustomTime ? qaStartTime : undefined,
+          end_time: qaUseCustomTime ? qaEndTime : undefined,
         }),
       })
         .then(async (res) => {
@@ -602,6 +624,8 @@ export function PlannerPage() {
               target_duration: block.dur,
               time_slot: block.time,
               plan_date: today,
+              start_time: block.startTime || undefined,
+              end_time: block.endTime || undefined,
             }),
           })
             .then(async (res) => {
@@ -730,7 +754,13 @@ export function PlannerPage() {
           </div>
           <div>
             {TIME_SLOTS.map(slot => {
-              const blks = planBlocks.filter(b => b.time === slot)
+              const blks = planBlocks
+                .filter(b => getBlockSlot(b) === slot)
+                .sort((a, b) => {
+                  const aRange = getBlockTimeRange(a)
+                  const bRange = getBlockTimeRange(b)
+                  return (aRange?.start ?? 0) - (bRange?.start ?? 0)
+                })
               return (
                 <div key={slot} className="timeline-slot">
                   <div className="ts-time">{SLOT_LABEL[slot]}</div>

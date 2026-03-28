@@ -6,6 +6,8 @@ export interface PlanWithDetails {
   plan_id: string
   plan_date: string
   time_slot: string | null
+  start_time: string | null
+  end_time: string | null
   target_duration: number
   logs?: Array<{ log_id: string }>
   studyTopic: {

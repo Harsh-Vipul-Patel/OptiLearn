@@ -7,6 +7,7 @@ import { usePlans } from '@/hooks/usePlans'
 import { useToast } from '@/components/ui/Toast'
 import { Badge } from '@/components/ui/Badge'
 import { BookIcon, FocusIcon, LaptopIcon, PhoneIcon, SparklesIcon, VolumeIcon } from '@/components/ui/AppIcons'
+import type { PlanWithDetails } from '@/hooks/usePlans'
 
 const DISTRACTIONS = [
   { key: 'phone', label: 'Phone', icon: <PhoneIcon width={14} height={14} /> },
@@ -16,6 +17,43 @@ const DISTRACTIONS = [
   { key: 'noise', label: 'Noise', icon: <VolumeIcon width={14} height={14} /> },
   { key: 'social-media', label: 'Social Media', icon: <LaptopIcon width={14} height={14} /> },
 ]
+
+function parseTimeToMinutes(value?: string | null): number | null {
+  if (!value) return null
+  const timePart = value.includes('T') ? value.split('T')[1] : value
+  const normalized = (timePart || '').slice(0, 5)
+  const [hh, mm] = normalized.split(':').map(Number)
+  if (!Number.isFinite(hh) || !Number.isFinite(mm)) return null
+  return hh * 60 + mm
+}
+
+function formatMinutesToTime(minutes: number): string {
+  const h24 = Math.floor(minutes / 60) % 24
+  const mm = minutes % 60
+  const h12 = h24 % 12 === 0 ? 12 : h24 % 12
+  const ampm = h24 < 12 ? 'AM' : 'PM'
+  return `${h12}:${String(mm).padStart(2, '0')} ${ampm}`
+}
+
+function getSlotFromMinutes(minutes: number): 'Morning' | 'Afternoon' | 'Evening' | 'Night' {
+  if (minutes >= 4 * 60 && minutes < 11 * 60) return 'Morning'
+  if (minutes >= 11 * 60 && minutes < 16 * 60) return 'Afternoon'
+  if (minutes >= 16 * 60 && minutes < 20 * 60) return 'Evening'
+  return 'Night'
+}
+
+function getPlanScheduleLabel(plan: PlanWithDetails): string {
+  const startMinutes = parseTimeToMinutes(plan.start_time)
+  const endMinutes = parseTimeToMinutes(plan.end_time)
+
+  if (startMinutes != null && endMinutes != null && endMinutes > startMinutes) {
+    const slot = getSlotFromMinutes(startMinutes)
+    return `${formatMinutesToTime(startMinutes)} - ${formatMinutesToTime(endMinutes)} (${slot})`
+  }
+
+  if (plan.time_slot) return plan.time_slot
+  return 'Anytime'
+}
 
 export function LoggerPage() {
   const { data: session } = useSession()
@@ -202,7 +240,7 @@ export function LoggerPage() {
                   <option value="">— Select a plan —</option>
                   {plans.map(p => (
                     <option key={p.plan_id} value={p.plan_id}>
-                      {p.studyTopic?.subject?.subject_name ?? '?'} · {p.studyTopic?.topic_name ?? '?'} ({p.target_duration} min{p.time_slot ? ` @ ${p.time_slot}` : ''})
+                      {p.studyTopic?.subject?.subject_name ?? '?'} · {p.studyTopic?.topic_name ?? '?'} ({p.target_duration} min @ {getPlanScheduleLabel(p)})
                     </option>
                   ))}
                 </select>

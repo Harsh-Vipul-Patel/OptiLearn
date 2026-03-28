@@ -14,9 +14,9 @@ function normalizeTimeSlot(value?: string | null) {
   // Convert planner timeline hour (HH:MM) into enum expected by DB.
   const hour = Number(value.split(':')[0])
   if (!Number.isFinite(hour)) return null
-  if (hour >= 5 && hour < 12) return 'Morning'
-  if (hour >= 12 && hour < 17) return 'Afternoon'
-  if (hour >= 17 && hour < 22) return 'Evening'
+  if (hour >= 4 && hour < 11) return 'Morning'
+  if (hour >= 11 && hour < 16) return 'Afternoon'
+  if (hour >= 16 && hour < 20) return 'Evening'
   return 'Night'
 }
 
@@ -53,7 +53,7 @@ export async function POST(request: Request) {
     const supabase = await createClient()
 
     const body = await request.json()
-    const { topic_id, target_duration, time_slot, plan_date, goal_type } = body
+    const { topic_id, target_duration, time_slot, plan_date, goal_type, start_time, end_time } = body
 
     if (!topic_id || !target_duration || !plan_date) {
       return NextResponse.json({ error: 'topic_id, target_duration and plan_date are required' }, { status: 400 })
@@ -115,26 +115,29 @@ export async function POST(request: Request) {
 
     const normalizedTimeSlot = normalizeTimeSlot(time_slot)
 
-    // Prevent duplicate plan entries for the same topic/date/time slot.
-    let duplicateQuery = supabase
-      .from('daily_plan')
-      .select('plan_id')
-      .eq('topic_id', resolvedTopicId)
-      .eq('plan_date', plan_date)
+    // Prevent overlapping time ranges across ANY plan on the same date.
+    // A topic can have multiple plans — only the time range must not overlap.
+    if (start_time && end_time) {
+      const { data: sameDatePlans, error: fetchErr } = await supabase
+        .from('daily_plan')
+        .select('plan_id, start_time, end_time')
+        .eq('plan_date', plan_date)
+        .not('start_time', 'is', null)
+        .not('end_time', 'is', null)
 
-    if (normalizedTimeSlot) {
-      duplicateQuery = duplicateQuery.eq('time_slot', normalizedTimeSlot)
-    } else {
-      duplicateQuery = duplicateQuery.is('time_slot', null)
-    }
+      if (fetchErr) throw new Error(fetchErr.message)
 
-    const duplicateCheck = await duplicateQuery.limit(1).maybeSingle()
-    if (duplicateCheck.error && duplicateCheck.error.code !== 'PGRST116') {
-      throw new Error(duplicateCheck.error.message)
-    }
+      const hasOverlap = (sameDatePlans || []).some((existing) => {
+        // Two ranges overlap when: start1 < end2 AND start2 < end1
+        return existing.start_time < end_time && start_time < existing.end_time
+      })
 
-    if (duplicateCheck.data?.plan_id) {
-      return NextResponse.json({ error: 'Plan already exists for this topic and time slot' }, { status: 409 })
+      if (hasOverlap) {
+        return NextResponse.json(
+          { error: 'This time range overlaps with another planned session' },
+          { status: 409 }
+        )
+      }
     }
 
     const plan = await PlansService.createPlan({
@@ -142,7 +145,9 @@ export async function POST(request: Request) {
       target_duration,
       time_slot: normalizedTimeSlot || undefined,
       plan_date,
-      goal_type
+      goal_type,
+      start_time: start_time || undefined,
+      end_time: end_time || undefined,
     })
 
     return NextResponse.json({ plan }, { status: 201 })
@@ -258,27 +263,30 @@ export async function PUT(request: Request) {
     }
 
     const normalizedTimeSlot = normalizeTimeSlot(time_slot)
+    const { start_time: bodyStartTime, end_time: bodyEndTime } = body
 
-    let duplicateQuery = supabase
-      .from('daily_plan')
-      .select('plan_id')
-      .eq('topic_id', resolvedTopicId)
-      .eq('plan_date', plan_date)
-      .neq('plan_id', plan_id)
+    // Prevent overlapping time ranges across ANY plan on the same date (excluding self).
+    if (bodyStartTime && bodyEndTime) {
+      const { data: sameDatePlans, error: fetchErr } = await supabase
+        .from('daily_plan')
+        .select('plan_id, start_time, end_time')
+        .eq('plan_date', plan_date)
+        .neq('plan_id', plan_id)
+        .not('start_time', 'is', null)
+        .not('end_time', 'is', null)
 
-    if (normalizedTimeSlot) {
-      duplicateQuery = duplicateQuery.eq('time_slot', normalizedTimeSlot)
-    } else {
-      duplicateQuery = duplicateQuery.is('time_slot', null)
-    }
+      if (fetchErr) throw new Error(fetchErr.message)
 
-    const duplicateCheck = await duplicateQuery.limit(1).maybeSingle()
-    if (duplicateCheck.error && duplicateCheck.error.code !== 'PGRST116') {
-      throw new Error(duplicateCheck.error.message)
-    }
+      const hasOverlap = (sameDatePlans || []).some((existing) => {
+        return existing.start_time < bodyEndTime && bodyStartTime < existing.end_time
+      })
 
-    if (duplicateCheck.data?.plan_id) {
-      return NextResponse.json({ error: 'Plan already exists for this topic and time slot' }, { status: 409 })
+      if (hasOverlap) {
+        return NextResponse.json(
+          { error: 'This time range overlaps with another planned session' },
+          { status: 409 }
+        )
+      }
     }
 
     const plan = await PlansService.updatePlan(plan_id, {
@@ -287,6 +295,8 @@ export async function PUT(request: Request) {
       time_slot: normalizedTimeSlot,
       plan_date,
       goal_type: goal_type ?? null,
+      start_time: bodyStartTime || null,
+      end_time: bodyEndTime || null,
     })
 
     return NextResponse.json({ plan }, { status: 200 })
