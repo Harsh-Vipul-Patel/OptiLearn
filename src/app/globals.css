@@ -50,6 +50,13 @@
   --r-md: 20px;
   --r-lg: 28px;
 
+  /* ── Motion tokens ── */
+  --ease-fluid: cubic-bezier(.22, .68, 0, 1);
+  --ease-spring: cubic-bezier(.22, .68, 0, 1.12);
+  --motion-fast: .18s;
+  --motion-base: .28s;
+  --motion-slow: .42s;
+
   /* ── Sidebar widths ── */
   --sidebar-w: 238px;
   --sidebar-w-collapsed: 64px;
@@ -228,6 +235,10 @@ body {
   min-height: 100vh;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 /* ═══════════ SCROLLBAR ═══════════ */
@@ -2194,6 +2205,120 @@ body {
 
 .sidebar-backdrop.open {
   display: block;
+}
+
+/* ═══════════ GLOBAL MOTION SYSTEM ═══════════ */
+a,
+button,
+input,
+select,
+textarea,
+[role='button'] {
+  transition-timing-function: var(--ease-fluid);
+}
+
+.btn-primary,
+.btn-secondary,
+.sidebar-collapse-btn,
+.sidebar-hamburger,
+.sidebar-global-toggle,
+.chip-del,
+.pb-remove,
+.insight-btn,
+.tab,
+.nav-item,
+.sidebar-logout,
+.user-card,
+.user-card-collapsed,
+.subject-chip,
+.d-chip,
+.drop-zone-banner,
+.ts-empty,
+.planner-block,
+.plan-slot,
+.card,
+.card-flat,
+.stat-card,
+.insight-card,
+.subjects-panel,
+.timeline-area,
+.ps-form,
+.feature-pill,
+.profile-id-card,
+.profile-id-grid > div,
+.chart-wrap,
+.login-card,
+.login-input,
+.form-input,
+.form-select,
+.form-textarea {
+  transition-duration: var(--motion-base);
+  transition-timing-function: var(--ease-fluid);
+}
+
+.card,
+.card-flat,
+.stat-card,
+.insight-card,
+.subjects-panel,
+.timeline-area,
+.ps-form,
+.feature-pill,
+.profile-id-card,
+.profile-id-grid > div,
+.plan-slot,
+.planner-block,
+.subject-chip,
+.nav-item,
+.user-card,
+.user-card-collapsed,
+.btn-primary,
+.btn-secondary,
+.sidebar-collapse-btn,
+.sidebar-hamburger,
+.sidebar-global-toggle,
+.insight-btn,
+.tab,
+.drop-zone-banner,
+.ts-empty,
+.d-chip,
+.chip-del,
+.pb-remove,
+.form-input,
+.form-select,
+.form-textarea,
+.login-input {
+  transition-property: transform, box-shadow, background-color, border-color, color, opacity;
+}
+
+.btn-primary:hover,
+.btn-secondary:hover,
+.sidebar-collapse-btn:hover,
+.sidebar-hamburger:hover,
+.sidebar-global-toggle:hover,
+.tab:hover,
+.nav-item:hover,
+.subject-chip:hover,
+.plan-slot:hover,
+.d-chip:hover,
+.insight-btn:hover {
+  transition-duration: var(--motion-fast);
+  transition-timing-function: var(--ease-spring);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* ═══════════ RESPONSIVE ═══════════ */
