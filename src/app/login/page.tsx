@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { normalizeEmail, validateEmail } from '@/lib/auth/email'
@@ -9,6 +9,7 @@ import { LockIcon, MailIcon, SparklesIcon, UserIcon, UserWaveIcon } from '@/comp
 
 export default function LoginPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const supabase = createClient()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -17,6 +18,14 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [isRegister, setIsRegister] = useState(false)
   const [name, setName] = useState('')
+
+  // Show a friendly error if redirected back from a failed auth callback
+  useEffect(() => {
+    if (searchParams.get('error') === 'auth-callback-failed') {
+      setError('Sign-in failed — the authentication service may be temporarily unavailable. Please try again.')
+    }
+  }, [searchParams])
+
 
   const handleLogin = async () => {
     if (loading) return
@@ -94,12 +103,52 @@ export default function LoginPage() {
   }
 
   const handleGoogle = async () => {
-    await supabase.auth.signInWithOAuth({
+    setLoading(true)
+    setError('')
+    setSuccess('')
+
+    // Check if Supabase is reachable before redirecting
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const maxRetries = 3
+    let reachable = false
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const controller = new AbortController()
+        const timeout = setTimeout(() => controller.abort(), 5000)
+        const res = await fetch(`${supabaseUrl}/auth/v1/health`, {
+          method: 'GET',
+          signal: controller.signal,
+        })
+        clearTimeout(timeout)
+        if (res.ok) { reachable = true; break }
+      } catch {
+        // Supabase unreachable, retry after delay
+      }
+      if (attempt < maxRetries) {
+        setError(`Authentication service is waking up… retrying (${attempt}/${maxRetries})`)
+        await new Promise(r => setTimeout(r, 2000))
+      }
+    }
+
+    if (!reachable) {
+      setLoading(false)
+      setError('Authentication service is temporarily unavailable. Please try again in a minute.')
+      return
+    }
+
+    setError('')
+    const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
         redirectTo: `${window.location.origin}/auth/callback?next=/dashboard`,
       },
     })
+
+    if (oauthError) {
+      setLoading(false)
+      setError('Could not connect to Google Sign-In. Please try again.')
+    }
   }
 
   return (

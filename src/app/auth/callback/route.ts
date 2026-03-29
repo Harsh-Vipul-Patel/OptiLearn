@@ -9,14 +9,31 @@ export async function GET(request: Request) {
   const next = searchParams.get('next') ?? '/dashboard'
 
   if (code) {
-    const supabase = await createClient()
-    const { error } = await supabase.auth.exchangeCodeForSession(code)
-    
-    if (!error) {
-      return NextResponse.redirect(`${origin}${next}`)
+    const maxRetries = 3
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const supabase = await createClient()
+        const { error } = await supabase.auth.exchangeCodeForSession(code)
+        
+        if (!error) {
+          return NextResponse.redirect(`${origin}${next}`)
+        }
+
+        // If it's a non-retryable error (e.g. invalid code), break immediately
+        if (error.message?.includes('invalid') || error.message?.includes('expired')) {
+          break
+        }
+      } catch {
+        // Supabase temporarily unreachable — retry
+      }
+
+      if (attempt < maxRetries) {
+        await new Promise(r => setTimeout(r, 1500))
+      }
     }
   }
 
-  // Return the user to an error page with some instructions
+  // Return the user to the login page with a descriptive error
   return NextResponse.redirect(`${origin}/login?error=auth-callback-failed`)
 }
