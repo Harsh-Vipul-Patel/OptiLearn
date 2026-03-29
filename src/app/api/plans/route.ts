@@ -1,7 +1,58 @@
 import { NextResponse } from 'next/server'
-import { createClient, getServerSession } from '@/lib/supabase/server'
+import { createClient } from '@/lib/supabase/server'
 
 import { PlansService } from '@/services/plans.service'
+
+type SessionUser = { id: string; email?: string; name: string }
+
+function isSessionMissingError(message: string) {
+  const text = message.toLowerCase()
+  return text.includes('auth session missing') || text.includes('jwt')
+}
+
+function isAuthNetworkError(message: string) {
+  const text = message.toLowerCase()
+  return text.includes('fetch failed') || text.includes('econnreset') || text.includes('etimedout') || text.includes('network')
+}
+
+async function getRouteSessionUser(): Promise<SessionUser | null> {
+  const supabase = await createClient()
+
+  try {
+    const { data: { user }, error } = await supabase.auth.getUser()
+
+    if (error) {
+      if (isSessionMissingError(error.message || '')) return null
+      throw new Error(error.message)
+    }
+
+    if (!user) return null
+
+    const fallbackName =
+      user.user_metadata?.name ||
+      user.user_metadata?.full_name ||
+      user.email?.split('@')[0] ||
+      'User'
+
+    return { id: user.id, email: user.email, name: fallbackName }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    if (isAuthNetworkError(message)) {
+      throw new Error(`AUTH_NETWORK_ERROR: ${message}`)
+    }
+    throw error
+  }
+}
+
+function handlePlansRouteError(error: unknown) {
+  const message = error instanceof Error ? error.message : 'Unknown error'
+
+  if (message.toLowerCase().includes('auth_network_error')) {
+    return NextResponse.json({ error: 'Auth service temporarily unavailable. Please retry.' }, { status: 503 })
+  }
+
+  return NextResponse.json({ error: message }, { status: 400 })
+}
 
 function normalizeTimeSlot(value?: string | null) {
   if (!value) return null
@@ -22,8 +73,8 @@ function normalizeTimeSlot(value?: string | null) {
 
 export async function GET(request: Request) {
   try {
-    const session = await getServerSession()
-    if (!session?.user) {
+    const user = await getRouteSessionUser()
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -32,21 +83,18 @@ export async function GET(request: Request) {
     const includeLoggedParam = searchParams.get('include_logged')
     const includeLogged = includeLoggedParam == null ? true : includeLoggedParam === 'true'
 
-    const plans = await PlansService.getPlans(session.user.id, date, includeLogged)
+    const plans = await PlansService.getPlans(user.id, date, includeLogged)
 
     return NextResponse.json({ plans }, { status: 200 })
   } catch (error) {
-    if (error instanceof Error) {
-      return NextResponse.json({ error: error.message }, { status: 400 })
-    }
-    return NextResponse.json({ error: 'Unknown error' }, { status: 400 })
+    return handlePlansRouteError(error)
   }
 }
 
 export async function POST(request: Request) {
   try {
-    const session = await getServerSession()
-    if (!session?.user) {
+    const user = await getRouteSessionUser()
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -74,7 +122,7 @@ export async function POST(request: Request) {
     }
 
     if (subjectFallback) {
-      if (subjectFallback.user_id !== session.user.id) {
+      if (subjectFallback.user_id !== user.id) {
         return NextResponse.json({ error: 'Invalid subject ownership' }, { status: 403 })
       }
 
@@ -152,17 +200,14 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ plan }, { status: 201 })
   } catch (error) {
-    if (error instanceof Error) {
-      return NextResponse.json({ error: error.message }, { status: 400 })
-    }
-    return NextResponse.json({ error: 'Unknown error' }, { status: 400 })
+    return handlePlansRouteError(error)
   }
 }
 
 export async function PUT(request: Request) {
   try {
-    const session = await getServerSession()
-    if (!session?.user) {
+    const user = await getRouteSessionUser()
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -202,7 +247,7 @@ export async function PUT(request: Request) {
       ? studyTopic.subject[0]
       : studyTopic?.subject
 
-    if (subjectOwner?.user_id !== session.user.id) {
+    if (subjectOwner?.user_id !== user.id) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
@@ -223,7 +268,7 @@ export async function PUT(request: Request) {
     }
 
     if (subjectFallback) {
-      if (subjectFallback.user_id !== session.user.id) {
+      if (subjectFallback.user_id !== user.id) {
         return NextResponse.json({ error: 'Invalid subject ownership' }, { status: 403 })
       }
 
@@ -301,9 +346,6 @@ export async function PUT(request: Request) {
 
     return NextResponse.json({ plan }, { status: 200 })
   } catch (error) {
-    if (error instanceof Error) {
-      return NextResponse.json({ error: error.message }, { status: 400 })
-    }
-    return NextResponse.json({ error: 'Unknown error' }, { status: 400 })
+    return handlePlansRouteError(error)
   }
 }

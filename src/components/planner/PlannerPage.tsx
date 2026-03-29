@@ -5,6 +5,7 @@ import { useToast } from '@/components/ui/Toast'
 import { useSuggestionsSync } from '@/hooks/useStudyLogSync'
 import { useSession } from '@/components/Providers'
 import Link from 'next/link'
+import { CustomSelect } from '@/components/ui/CustomSelect'
 import { BookIcon, SparklesIcon, TargetIcon, TrashIcon } from '@/components/ui/AppIcons'
 import { formatPlanScheduleLabel } from '@/lib/planTimeLabel'
 
@@ -214,6 +215,74 @@ function getBlockTimeRange(block: PlanBlock, ranges: SlotRanges): { start: numbe
   return null
 }
 
+type SlotWindow = { start: number; end: number }
+
+function buildContinuousSlotWindows(ranges: SlotRanges): Record<SlotName, SlotWindow> {
+  const starts = {} as Record<SlotName, number>
+  let prevStart: number | null = null
+
+  for (const slot of TIME_SLOTS) {
+    const rawStart = ranges[slot].start
+    let start = rawStart
+    if (prevStart !== null) {
+      while (start <= prevStart) start += 1440
+    }
+    starts[slot] = start
+    prevStart = start
+  }
+
+  const windows = {} as Record<SlotName, SlotWindow>
+  for (let i = 0; i < TIME_SLOTS.length; i += 1) {
+    const slot = TIME_SLOTS[i]
+    const nextSlot = TIME_SLOTS[(i + 1) % TIME_SLOTS.length]
+    const start = starts[slot]
+    const nextStart = i === TIME_SLOTS.length - 1
+      ? starts[TIME_SLOTS[0]] + 1440
+      : starts[nextSlot]
+    windows[slot] = { start, end: nextStart }
+  }
+
+  return windows
+}
+
+function normalizeMinuteToWindow(minute: number, window: SlotWindow): number {
+  let normalized = minute
+  while (normalized < window.start) normalized += 1440
+  while (normalized >= window.end) normalized -= 1440
+  if (normalized < window.start) normalized += 1440
+  return normalized
+}
+
+function getAbsoluteBlockRange(
+  block: PlanBlock,
+  ranges: SlotRanges,
+  windows: Record<SlotName, SlotWindow>
+): { start: number; end: number } | null {
+  const derivedSlot = getBlockSlot(block, ranges)
+  const slotName = (TIME_SLOTS.find((slot) => slot === derivedSlot) ?? 'Morning') as SlotName
+  const window = windows[slotName]
+  if (!window) return null
+
+  if (block.startTime && block.endTime) {
+    const startMin = timeToMinutes(block.startTime)
+    const endMin = timeToMinutes(block.endTime)
+    if (startMin !== null && endMin !== null && endMin > startMin) {
+      const start = normalizeMinuteToWindow(startMin, window)
+      return { start, end: start + (endMin - startMin) }
+    }
+  }
+
+  const start = window.start
+  const duration = Math.max(0, Number(block.dur || 0))
+  return { start, end: start + duration }
+}
+
+type PendingSplitConfirmation = {
+  sid: string
+  blocks: PlanBlock[]
+  message: string
+}
+
 /* ── Main Component ── */
 export function PlannerPage() {
   const { data: session } = useSession()
@@ -245,6 +314,7 @@ export function PlannerPage() {
     Evening: { start: minutesToClock(DEFAULT_SLOT_RANGES.Evening.start), end: minutesToClock(DEFAULT_SLOT_RANGES.Evening.end) },
     Night: { start: minutesToClock(DEFAULT_SLOT_RANGES.Night.start), end: minutesToClock(DEFAULT_SLOT_RANGES.Night.end) },
   }))
+  const [pendingSplitConfirmation, setPendingSplitConfirmation] = useState<PendingSplitConfirmation | null>(null)
 
   useEffect(() => {
     setSlotRanges(getStoredSlotRanges(session?.user?.id))
@@ -441,7 +511,6 @@ export function PlannerPage() {
     clone.style.margin = '0'
     clone.style.zIndex = '9999'
     clone.style.pointerEvents = 'none'
-    clone.style.transition = 'transform 520ms cubic-bezier(.2,.8,.2,1), opacity 520ms ease'
     clone.style.transformOrigin = 'center center'
     document.body.appendChild(clone)
 
@@ -450,16 +519,45 @@ export function PlannerPage() {
     const dx = targetX - subjectRect.left
     const dy = targetY - subjectRect.top
 
+    const spinDirection = dx >= 0 ? 1 : -1
+    const jumpHeight = Math.min(140, Math.max(70, Math.abs(dx) * 0.18 + 52))
+    const apexX = dx * 0.46
+    const apexY = dy - jumpHeight
+
+    const finishAnimation = () => {
+      clone.remove()
+      setSlotPulse(slot)
+      slotEl.animate(
+        [
+          { transform: 'translateY(0px) scale(1)' },
+          { transform: 'translateY(-3px) scale(1.01)', offset: 0.36 },
+          { transform: 'translateY(0px) scale(1)', offset: 1 },
+        ],
+        { duration: 420, easing: 'cubic-bezier(.24,.82,.3,1)' }
+      )
+      setTimeout(() => setSlotPulse((prev) => (prev === slot ? null : prev)), 700)
+    }
+
+    if (typeof clone.animate === 'function') {
+      const travel = clone.animate(
+        [
+          { transform: 'translate(0px, 0px) rotate(0deg) scale(1)', opacity: 1, offset: 0 },
+          { transform: `translate(${apexX}px, ${apexY}px) rotate(${spinDirection * 170}deg) scale(0.96)`, opacity: 0.95, offset: 0.46 },
+          { transform: `translate(${dx}px, ${dy}px) rotate(${spinDirection * 360}deg) scale(0.86)`, opacity: 0.12, offset: 1 },
+        ],
+        { duration: 760, easing: 'cubic-bezier(.2,.78,.24,1)', fill: 'forwards' }
+      )
+      travel.onfinish = finishAnimation
+      return
+    }
+
+    clone.style.transition = 'transform 760ms cubic-bezier(.2,.78,.24,1), opacity 760ms ease'
     requestAnimationFrame(() => {
-      clone.style.transform = `translate(${dx}px, ${dy}px) scale(0.88)`
+      clone.style.transform = `translate(${dx}px, ${dy}px) rotate(${spinDirection * 360}deg) scale(0.86)`
       clone.style.opacity = '0.12'
     })
 
-    setTimeout(() => {
-      clone.remove()
-      setSlotPulse(slot)
-      setTimeout(() => setSlotPulse((prev) => (prev === slot ? null : prev)), 700)
-    }, 560)
+    setTimeout(finishAnimation, 780)
   }, [])
 
   const addBlockFromForm = useCallback(() => {
@@ -576,10 +674,6 @@ export function PlannerPage() {
     const sid = qaSubject || subjects[0]?.id
     if (!sid) { showToast('No subjects — add one first', 'warning'); return }
 
-    let newStartMin: number
-    let newEndMin: number
-    let duration: number
-
     if (qaUseCustomTime) {
       const startMin = timeToMinutes(qaStartTime)
       const endMin = timeToMinutes(qaEndTime)
@@ -593,45 +687,147 @@ export function PlannerPage() {
         showToast('End time must be after start time', 'warning')
         return
       }
-      
-      newStartMin = startMin
-      newEndMin = endMin
-      duration = newEndMin - newStartMin
-    } else {
-      const slotStart = slotRanges[qaTime as SlotName]?.start
-      if (!Number.isFinite(slotStart)) {
-        showToast('Invalid time slot', 'warning')
+
+      type CustomSegment = { slot: SlotName; start: number; end: number; duration: number }
+      const customSegments: CustomSegment[] = []
+      let cursor = startMin
+
+      while (cursor < endMin) {
+        const slot = getSlotForMinutes(cursor, slotRanges)
+        let segmentEnd = cursor + 1
+        while (segmentEnd < endMin && getSlotForMinutes(segmentEnd, slotRanges) === slot) {
+          segmentEnd += 1
+        }
+        customSegments.push({
+          slot,
+          start: cursor,
+          end: segmentEnd,
+          duration: segmentEnd - cursor,
+        })
+        cursor = segmentEnd
+      }
+
+      if (customSegments.some((segment) => hasTimeConflict(segment.start, segment.end))) {
+        showToast('This time overlaps with another session!', 'warning')
         return
       }
-      newStartMin = slotStart
-      newEndMin = slotStart + qaDur
-      duration = qaDur
-    }
 
-    // Check for overlaps with existing blocks
-    if (hasTimeConflict(newStartMin, newEndMin)) {
-      showToast('This time overlaps with another session!', 'warning')
+      const timestamp = Date.now()
+      const newBlocks: PlanBlock[] = customSegments.map((segment, index) => ({
+        id: `b${timestamp}-${index}`,
+        sid,
+        topic: qaTopic,
+        time: segment.slot,
+        startTime: minutesToClock(segment.start),
+        endTime: minutesToClock(segment.end),
+        dur: segment.duration,
+        diff: qaDiff,
+        goal: qaGoal,
+        persisted: false,
+      }))
+
+      if (newBlocks.length > 1) {
+        setPendingSplitConfirmation({
+          sid,
+          blocks: newBlocks,
+          message: `${endMin - startMin} minutes crosses your preferred slot boundary. Split into ${newBlocks.length} sessions across the timeline?`,
+        })
+        return
+      }
+
+      setPlanBlocks(prev => [...prev, ...newBlocks])
+      const s = subjects.find(x => x.id === sid)
+      if (newBlocks.length > 1) {
+        showToast(`${s ? s.name : 'Block'} split into ${newBlocks.length} sessions`, 'info')
+      } else {
+        showToast(`${s ? s.name : 'Block'} added!`)
+      }
+      setTimeout(() => animateSubjectToSlot(sid, newBlocks[0].time), 80)
+      resetFormFields()
       return
     }
 
-    setPlanBlocks(prev => [...prev, { 
-      id: 'b' + Date.now(), 
-      sid, 
-      topic: qaTopic, 
-      time: qaUseCustomTime ? getSlotForMinutes(newStartMin, slotRanges) : qaTime,
-      startTime: qaUseCustomTime ? qaStartTime : undefined,
-      endTime: qaUseCustomTime ? qaEndTime : undefined,
-      dur: duration, 
-      diff: qaDiff, 
-      goal: qaGoal, 
-      persisted: false 
-    }])
+    const selectedSlot = (TIME_SLOTS.find((slot) => slot === qaTime) ?? 'Morning') as SlotName
+    const slotWindows = buildContinuousSlotWindows(slotRanges)
+    const startIndex = TIME_SLOTS.indexOf(selectedSlot)
+
+    const nextStartBySlot = {} as Record<SlotName, number>
+    for (const slot of TIME_SLOTS) {
+      const window = slotWindows[slot]
+      let nextStart = window.start
+
+      for (const block of planBlocks) {
+        const blockSlot = (TIME_SLOTS.find((name) => name === getBlockSlot(block, slotRanges)) ?? 'Morning') as SlotName
+        if (blockSlot !== slot) continue
+
+        const absolute = getAbsoluteBlockRange(block, slotRanges, slotWindows)
+        if (!absolute) continue
+        nextStart = Math.max(nextStart, Math.min(absolute.end, window.end))
+      }
+
+      nextStartBySlot[slot] = Math.min(nextStart, window.end)
+    }
+
+    type PlannedSegment = { slot: SlotName; startAbs: number; endAbs: number; duration: number }
+    const segments: PlannedSegment[] = []
+    let remaining = qaDur
+
+    for (let offset = 0; offset < TIME_SLOTS.length && remaining > 0; offset += 1) {
+      const slot = TIME_SLOTS[(startIndex + offset) % TIME_SLOTS.length]
+      const window = slotWindows[slot]
+      const startAbs = Math.max(nextStartBySlot[slot], window.start)
+      const available = Math.max(0, window.end - startAbs)
+      if (available <= 0) continue
+
+      const chunk = Math.min(remaining, available)
+      segments.push({ slot, startAbs, endAbs: startAbs + chunk, duration: chunk })
+      nextStartBySlot[slot] = startAbs + chunk
+      remaining -= chunk
+    }
+
+    if (!segments.length) {
+      showToast(`No time left in ${selectedSlot} slot`, 'warning')
+      return
+    }
+
+    if (remaining > 0) {
+      showToast('Not enough remaining time across today\'s slots', 'warning')
+      return
+    }
+
+    const timestamp = Date.now()
+    const newBlocks: PlanBlock[] = segments.map((segment, index) => ({
+      id: `b${timestamp}-${index}`,
+      sid,
+      topic: qaTopic,
+      time: segment.slot,
+      startTime: minutesToClock(segment.startAbs),
+      endTime: minutesToClock(segment.endAbs),
+      dur: segment.duration,
+      diff: qaDiff,
+      goal: qaGoal,
+      persisted: false,
+    }))
+
+    if (newBlocks.length > 1) {
+      setPendingSplitConfirmation({
+        sid,
+        blocks: newBlocks,
+        message: `${qaDur} minutes does not fit fully in ${selectedSlot}. Split into ${newBlocks.length} sessions across the next available slots?`,
+      })
+      return
+    }
+
+    setPlanBlocks(prev => [...prev, ...newBlocks])
     const s = subjects.find(x => x.id === sid)
-    showToast(`${s ? s.name : 'Block'} added!`)
-    const targetSlot = qaUseCustomTime ? getSlotForMinutes(newStartMin, slotRanges) : qaTime
-    setTimeout(() => animateSubjectToSlot(sid, targetSlot), 80)
+    if (newBlocks.length > 1) {
+      showToast(`${s ? s.name : 'Block'} split into ${newBlocks.length} sessions`, 'info')
+    } else {
+      showToast(`${s ? s.name : 'Block'} added!`)
+    }
+    setTimeout(() => animateSubjectToSlot(sid, newBlocks[0].time), 80)
     resetFormFields()
-  }, [editingBlockId, qaSubject, qaTopic, qaTime, qaUseCustomTime, qaStartTime, qaEndTime, qaDur, qaDiff, qaGoal, subjects, hasTimeConflict, showToast, animateSubjectToSlot, slotRanges])
+  }, [editingBlockId, qaSubject, qaTopic, qaTime, qaUseCustomTime, qaStartTime, qaEndTime, qaDur, qaDiff, qaGoal, subjects, hasTimeConflict, showToast, animateSubjectToSlot, slotRanges, planBlocks])
 
   const resetFormFields = useCallback(() => {
     setQaTopic('')
@@ -643,6 +839,23 @@ export function PlannerPage() {
     setQaDiff('Medium')
     setQaGoal('Learn')
   }, [])
+
+  const confirmSplitSession = useCallback(() => {
+    if (!pendingSplitConfirmation) return
+
+    const { sid, blocks } = pendingSplitConfirmation
+    setPlanBlocks(prev => [...prev, ...blocks])
+    const subject = subjects.find(x => x.id === sid)
+    showToast(`${subject ? subject.name : 'Block'} split into ${blocks.length} sessions`, 'info')
+    setTimeout(() => animateSubjectToSlot(sid, blocks[0].time), 80)
+    setPendingSplitConfirmation(null)
+    resetFormFields()
+  }, [pendingSplitConfirmation, subjects, showToast, animateSubjectToSlot, resetFormFields])
+
+  const cancelSplitSession = useCallback(() => {
+    setPendingSplitConfirmation(null)
+    showToast('Split session cancelled', 'info')
+  }, [showToast])
 
   const startEditBlock = useCallback((id: string) => {
     const blk = planBlocks.find(b => b.id === id)
@@ -744,6 +957,18 @@ export function PlannerPage() {
 
   const totalHours = (planBlocks.reduce((a, b) => a + b.dur, 0) / 60).toFixed(1)
   const visibleSlots = TIME_SLOTS.filter(slot => planBlocks.some(b => getBlockSlot(b, slotRanges) === slot))
+  const subjectOptions = subjects.map((subject) => ({ value: subject.id, label: subject.name }))
+  const timeSlotOptions = TIME_SLOTS.map((slot) => ({ value: slot, label: getSlotLabel(slot, slotRanges) }))
+  const difficultyOptions = [
+    { value: 'Easy', label: 'Easy' },
+    { value: 'Medium', label: 'Medium' },
+    { value: 'Hard', label: 'Hard' },
+  ]
+  const goalOptions = [
+    { value: 'Learn', label: 'Learn' },
+    { value: 'Revise', label: 'Revise' },
+    { value: 'Practice', label: 'Practice' },
+  ]
 
   return (
     <div>
@@ -845,6 +1070,7 @@ export function PlannerPage() {
                       Evening: { start: minutesToClock(defaults.Evening.start), end: minutesToClock(defaults.Evening.end) },
                       Night: { start: minutesToClock(defaults.Night.start), end: minutesToClock(defaults.Night.end) },
                     })
+                    showToast('Timeline slot timings reset to defaults', 'info')
                   }}
                 >
                   Reset Defaults
@@ -923,9 +1149,14 @@ export function PlannerPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div className="form-group">
                 <label className="form-label">Subject</label>
-                <select className="form-select" value={qaSubject} onChange={e => setQaSubject(e.target.value)}>
-                  {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
+                <CustomSelect
+                  value={qaSubject}
+                  onChange={setQaSubject}
+                  options={subjectOptions}
+                  placeholder="Select subject"
+                  ariaLabel="Select subject"
+                  disabled={subjectOptions.length === 0}
+                />
               </div>
               <div className="form-group">
                 <label className="form-label">Topic / Notes</label>
@@ -970,9 +1201,12 @@ export function PlannerPage() {
                 <>
                   <div className="form-group">
                     <label className="form-label">Time Slot</label>
-                    <select className="form-select" value={qaTime} onChange={e => setQaTime(e.target.value as SlotName)}>
-                      {TIME_SLOTS.map(slot => <option key={slot} value={slot}>{getSlotLabel(slot, slotRanges)}</option>)}
-                    </select>
+                    <CustomSelect
+                      value={qaTime}
+                      onChange={(value) => setQaTime(value as SlotName)}
+                      options={timeSlotOptions}
+                      ariaLabel="Select time slot"
+                    />
                   </div>
                   <div className="form-group">
                     <label className="form-label">Duration: <span style={{ color: 'var(--terra)', fontWeight: 700 }}>{qaDur} min</span></label>
@@ -991,15 +1225,21 @@ export function PlannerPage() {
               <div className="planner-dual-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                 <div className="form-group">
                   <label className="form-label">Difficulty</label>
-                  <select className="form-select" value={qaDiff} onChange={e => setQaDiff(e.target.value)}>
-                    <option>Easy</option><option>Medium</option><option>Hard</option>
-                  </select>
+                  <CustomSelect
+                    value={qaDiff}
+                    onChange={setQaDiff}
+                    options={difficultyOptions}
+                    ariaLabel="Select difficulty"
+                  />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Goal</label>
-                  <select className="form-select" value={qaGoal} onChange={e => setQaGoal(e.target.value)}>
-                    <option>Learn</option><option>Revise</option><option>Practice</option>
-                  </select>
+                  <CustomSelect
+                    value={qaGoal}
+                    onChange={setQaGoal}
+                    options={goalOptions}
+                    ariaLabel="Select goal"
+                  />
                 </div>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: editingBlockId ? '1fr 1fr' : '1fr', gap: 8 }}>
@@ -1036,6 +1276,25 @@ export function PlannerPage() {
           </Link>
         </div>
       </div>
+
+      {pendingSplitConfirmation && (
+        <div className="logout-confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="split-session-confirm-title">
+          <div className="logout-confirm-card">
+            <h3 id="split-session-confirm-title">Split session across slots?</h3>
+            <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--text-soft)', lineHeight: 1.45 }}>
+              {pendingSplitConfirmation.message}
+            </p>
+            <div className="logout-confirm-actions">
+              <button type="button" className="logout-confirm-primary" onClick={confirmSplitSession}>
+                Split Session
+              </button>
+              <button type="button" className="logout-confirm-secondary" onClick={cancelSplitSession}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

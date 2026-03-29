@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useToast } from '@/components/ui/Toast'
+import { CustomSelect } from '@/components/ui/CustomSelect'
 
 type ProfileData = {
   user_id?: string
@@ -22,6 +23,22 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
+
+  const examOptions = [
+    { value: '', label: '-- Select exam goal --' },
+    { value: 'JEE', label: 'JEE' },
+    { value: 'NEET', label: 'NEET' },
+    { value: 'Boards', label: 'Boards' },
+    { value: 'Others', label: 'Others' },
+  ]
+
+  const preferredTimeOptions = [
+    { value: '', label: '-- Let AI determine from logs --' },
+    { value: 'Morning', label: 'Morning (6 AM - 12 PM)' },
+    { value: 'Afternoon', label: 'Afternoon (12 PM - 6 PM)' },
+    { value: 'Evening', label: 'Evening (6 PM - 12 AM)' },
+    { value: 'Night', label: 'Night Owl (12 AM - 6 AM)' },
+  ]
 
   useEffect(() => {
     fetch('/api/profile')
@@ -160,17 +177,12 @@ export default function ProfilePage() {
                   Helps the AI engine tailor suggestions.
                 </span>
               </label>
-              <select
-                className="form-select"
+              <CustomSelect
                 value={examType}
-                onChange={(e) => setExamType(e.target.value)}
-              >
-                <option value="">-- Select exam goal --</option>
-                <option value="JEE">JEE</option>
-                <option value="NEET">NEET</option>
-                <option value="Boards">Boards</option>
-                <option value="Others">Others</option>
-              </select>
+                onChange={setExamType}
+                options={examOptions}
+                ariaLabel="Select target exam goal"
+              />
             </div>
             
             <div className="form-group">
@@ -180,17 +192,12 @@ export default function ProfilePage() {
                   When do you feel most productive?
                 </span>
               </label>
-              <select 
-                className="form-select" 
-                value={preferredTime} 
-                onChange={(e) => setPreferredTime(e.target.value)}
-              >
-                <option value="">-- Let AI determine from logs --</option>
-                <option value="Morning">Morning (6 AM - 12 PM)</option>
-                <option value="Afternoon">Afternoon (12 PM - 6 PM)</option>
-                <option value="Evening">Evening (6 PM - 12 AM)</option>
-                <option value="Night">Night Owl (12 AM - 6 AM)</option>
-              </select>
+              <CustomSelect
+                value={preferredTime}
+                onChange={setPreferredTime}
+                options={preferredTimeOptions}
+                ariaLabel="Select preferred study time"
+              />
             </div>
 
             <div style={{ marginTop: 10 }}>

@@ -6,6 +6,7 @@ import { useStudyLogSync } from '@/hooks/useStudyLogSync'
 import { usePlans } from '@/hooks/usePlans'
 import { useToast } from '@/components/ui/Toast'
 import { Badge } from '@/components/ui/Badge'
+import { CustomSelect } from '@/components/ui/CustomSelect'
 import { BookIcon, FocusIcon, LaptopIcon, PhoneIcon, SparklesIcon, VolumeIcon } from '@/components/ui/AppIcons'
 import { formatPlanScheduleLabel } from '@/lib/planTimeLabel'
 
@@ -95,6 +96,20 @@ export function LoggerPage() {
   })
 
   const uniqueSubjects = Array.from(new Set(logs.map((log) => getSubjectName(log))))
+  const planOptions = plans.map((plan) => ({
+    value: plan.plan_id,
+    label: `${plan.studyTopic?.subject?.subject_name ?? '?'} · ${plan.studyTopic?.topic_name ?? '?'} (${plan.target_duration} min @ ${formatPlanScheduleLabel(plan)})`,
+  }))
+  const dayFilterOptions = [
+    { value: 'all', label: 'All Days' },
+    { value: 'today', label: 'Today' },
+    { value: 'yesterday', label: 'Yesterday' },
+    { value: 'last7', label: 'Last 7 Days' },
+  ]
+  const subjectFilterOptions = [
+    { value: 'all', label: 'All Subjects' },
+    ...uniqueSubjects.map((subject) => ({ value: subject, label: subject })),
+  ]
 
   const toggleDistraction = (d: string) => {
     setDistractions(prev => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d])
@@ -205,18 +220,13 @@ export function LoggerPage() {
                   All sessions finished for today. <a href="/dashboard/planner" style={{ color: 'var(--sage)', fontWeight: 600 }}>Add another plan →</a>
                 </div>
               ) : (
-                <select
-                  className="form-select"
+                <CustomSelect
                   value={selectedPlanId}
-                  onChange={e => setSelectedPlanId(e.target.value)}
-                >
-                  <option value="">— Select a plan —</option>
-                  {plans.map(p => (
-                    <option key={p.plan_id} value={p.plan_id}>
-                      {p.studyTopic?.subject?.subject_name ?? '?'} · {p.studyTopic?.topic_name ?? '?'} ({p.target_duration} min @ {formatPlanScheduleLabel(p)})
-                    </option>
-                  ))}
-                </select>
+                  onChange={setSelectedPlanId}
+                  options={planOptions}
+                  placeholder="— Select a plan —"
+                  ariaLabel="Select study plan"
+                />
               )}
             </div>
 
@@ -289,18 +299,18 @@ export function LoggerPage() {
         <div className="card">
           <div className="section-title">Recent Sessions</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
-            <select className="form-select" value={dayFilter} onChange={e => setDayFilter(e.target.value as 'all' | 'today' | 'yesterday' | 'last7')}>
-              <option value="all">All Days</option>
-              <option value="today">Today</option>
-              <option value="yesterday">Yesterday</option>
-              <option value="last7">Last 7 Days</option>
-            </select>
-            <select className="form-select" value={subjectFilter} onChange={e => setSubjectFilter(e.target.value)}>
-              <option value="all">All Subjects</option>
-              {uniqueSubjects.map(subject => (
-                <option key={subject} value={subject}>{subject}</option>
-              ))}
-            </select>
+            <CustomSelect
+              value={dayFilter}
+              onChange={(value) => setDayFilter(value as 'all' | 'today' | 'yesterday' | 'last7')}
+              options={dayFilterOptions}
+              ariaLabel="Filter recent sessions by day"
+            />
+            <CustomSelect
+              value={subjectFilter}
+              onChange={setSubjectFilter}
+              options={subjectFilterOptions}
+              ariaLabel="Filter recent sessions by subject"
+            />
           </div>
           {logsLoading ? (
             <div style={{ color: 'var(--text-soft)', fontSize: 13, padding: '12px 0' }}>Loading sessions…</div>

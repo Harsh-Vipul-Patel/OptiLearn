@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useSession } from '@/components/Providers'
 import { useStudyLogSync } from '@/hooks/useStudyLogSync'
 import { usePlans } from '@/hooks/usePlans'
+import { CustomSelect } from '@/components/ui/CustomSelect'
 
 const days = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
 const CHART_FONT = { family: 'Inter,sans-serif', size: 11.5 }
@@ -14,10 +15,28 @@ type StudyLog = {
   end_time?: string | null
   efficiency?: number
   focus_level?: number
+  dailyPlan?: {
+    studyTopic?: {
+      subject?: {
+        subject_name?: string
+      }
+    }
+  }
 }
 
 type ChartLike = {
   destroy: () => void
+}
+
+function toLocalDateKey(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+function getLogDurationHours(log: StudyLog): number {
+  const start = new Date(log.start_time || '').getTime()
+  const end = new Date(log.end_time || '').getTime()
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return 0
+  return (end - start) / 3600000
 }
 
 export function AnalyticsPage() {
@@ -30,24 +49,28 @@ export function AnalyticsPage() {
   const monthRef = useRef<HTMLCanvasElement>(null)
 
   const [tab, setTab] = useState<'week' | 'month'>('week')
+  const [monthSubjectFilter, setMonthSubjectFilter] = useState('all')
   
   // Data Aggregations
   const now = new Date()
-  const weekStart = new Date(now)
-  weekStart.setDate(now.getDate() - 7)
-  const monthStart = new Date(now)
-  monthStart.setDate(now.getDate() - 30)
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const weekStart = new Date(todayStart)
+  weekStart.setDate(todayStart.getDate() - 6)
+  const monthStart = new Date(todayStart)
+  monthStart.setDate(todayStart.getDate() - 29)
 
   const typedLogs = logs as StudyLog[]
-  const weekLogs = typedLogs.filter((l) => !!l.start_time && new Date(l.start_time) >= weekStart)
-  const monthLogs = typedLogs.filter((l) => !!l.start_time && new Date(l.start_time) >= monthStart)
+  const weekLogs = typedLogs.filter((l) => {
+    const startedAt = new Date(l.start_time || '')
+    return !Number.isNaN(startedAt.getTime()) && startedAt >= weekStart
+  })
+  const monthLogs = typedLogs.filter((l) => {
+    const startedAt = new Date(l.start_time || '')
+    return !Number.isNaN(startedAt.getTime()) && startedAt >= monthStart
+  })
 
   const calculateStats = (filteredLogs: StudyLog[]) => {
-    const totalMin = filteredLogs.reduce((acc, l) => {
-      const s = new Date(l.start_time || '').getTime()
-      const e = l.end_time ? new Date(l.end_time).getTime() : new Date().getTime()
-      return acc + (e - s) / 60000
-    }, 0)
+    const totalMin = filteredLogs.reduce((acc, l) => acc + (getLogDurationHours(l) * 60), 0)
     const effArr = filteredLogs.map((l) => Number(l.efficiency || 0)).filter(Boolean)
     const avgEff = effArr.length ? Math.round(effArr.reduce((a,b)=>a+b,0)/effArr.length) : 0
     const focusArr = filteredLogs.map((l) => Number(l.focus_level || 0)).filter(Boolean)
@@ -78,14 +101,24 @@ export function AnalyticsPage() {
 
   // Arrays for Charts
   const weekLabels = Array.from({length:7}, (_,i) => {
-    const d=new Date(); d.setDate(d.getDate() - (6-i)); return d.toLocaleDateString('en-US',{weekday:'short'})
+    const d = new Date(todayStart)
+    d.setDate(todayStart.getDate() - (6 - i))
+    return d.toLocaleDateString('en-US', { weekday: 'short' })
   })
   const weekDates = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date()
-    d.setDate(d.getDate() - (6 - i))
-    return d.toISOString().slice(0, 10)
+    const d = new Date(todayStart)
+    d.setDate(todayStart.getDate() - (6 - i))
+    return toLocalDateKey(d)
   })
   const weekDateIndex = new Map(weekDates.map((date, idx) => [date, idx]))
+  const planSubjectById = new Map(
+    plans.map((plan) => [plan.plan_id, plan.studyTopic?.subject?.subject_name || 'Unknown subject'])
+  )
+  const getSubjectName = (log: StudyLog) => (
+    log.dailyPlan?.studyTopic?.subject?.subject_name ||
+    (log.plan_id ? planSubjectById.get(log.plan_id) : undefined) ||
+    'Unknown subject'
+  )
 
   const plannedData = Array(7).fill(0)
   const actualData = Array(7).fill(0)
@@ -100,35 +133,55 @@ export function AnalyticsPage() {
   })
 
   weekLogs.forEach((l) => {
-    // 0 = today, 1 = yesterday, ... 6 = 6 days ago
-    const dayDist = Math.floor((now.getTime() - new Date(l.start_time || '').getTime()) / 86400000)
-    if (dayDist >= 0 && dayDist < 7) {
-      const idx = 6 - dayDist
-      const s = new Date(l.start_time || '').getTime()
-      const e = l.end_time ? new Date(l.end_time).getTime() : new Date().getTime()
-      actualData[idx] += (e - s) / 3600000 // push hours
-      
-      focusData[idx] += Number(l.focus_level)
-      focusCounts[idx] += 1
-    }
+    const startedAt = new Date(l.start_time || '')
+    if (Number.isNaN(startedAt.getTime())) return
+    const idx = weekDateIndex.get(toLocalDateKey(startedAt))
+    if (idx === undefined) return
+
+    actualData[idx] += getLogDurationHours(l)
+    focusData[idx] += Number(l.focus_level)
+    focusCounts[idx] += 1
   })
   
   const avgFocusData = focusData.map((f, i) => focusCounts[i] ? Number((f / focusCounts[i]).toFixed(1)) : 0)
 
-  // Subject parsing
-  const subjMap: Record<string, number> = {}
-  weekLogs.forEach((l) => {
-    const plan = plans.find(p => p.plan_id === l.plan_id)
-    if (plan && plan.studyTopic?.subject) {
-      const subj = plan.studyTopic.subject.subject_name
-      if (!subjMap[subj]) subjMap[subj] = 0
-      const s = new Date(l.start_time || '').getTime()
-      const e = l.end_time ? new Date(l.end_time).getTime() : new Date().getTime()
-      subjMap[subj] += (e - s) / 3600000
+  const buildSubjectHours = (sourceLogs: StudyLog[]) => {
+    const subjectMap: Record<string, number> = {}
+
+    sourceLogs.forEach((log) => {
+      const subjectName = getSubjectName(log)
+
+      if (!subjectMap[subjectName]) subjectMap[subjectName] = 0
+      subjectMap[subjectName] += getLogDurationHours(log)
+    })
+
+    return {
+      labels: Object.keys(subjectMap),
+      data: Object.values(subjectMap).map((hours) => Number(hours.toFixed(1))),
     }
+  }
+
+  const { labels: subjectLabels, data: subjectData } = buildSubjectHours(weekLogs)
+  const { labels: monthSubjectOptions } = buildSubjectHours(monthLogs)
+  const monthSubjectFilterOptions = [
+    { value: 'all', label: 'All Subjects' },
+    ...monthSubjectOptions.map((subject) => ({ value: subject, label: subject })),
+  ]
+
+  const monthWeekdayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+  const monthWeekdayData = Array(7).fill(0)
+  const monthLogsForWeekdayChart = monthLogs.filter((log) => (
+    monthSubjectFilter === 'all' || getSubjectName(log) === monthSubjectFilter
+  ))
+  monthLogsForWeekdayChart.forEach((log) => {
+    const startedAt = new Date(log.start_time || '')
+    if (Number.isNaN(startedAt.getTime())) return
+    const day = startedAt.getDay()
+    const idx = day === 0 ? 6 : day - 1
+    monthWeekdayData[idx] += getLogDurationHours(log)
   })
-  const subjectLabels = Object.keys(subjMap)
-  const subjectData = Object.values(subjMap).map(h => Number(h.toFixed(1)))
+  const monthWeekdaySeries = monthWeekdayData.map((hours) => Number(hours.toFixed(2)))
+  const selectedMonthSubjectLabel = monthSubjectFilter === 'all' ? 'All subjects' : monthSubjectFilter
 
   // Heatmap
   const heatData = Array.from({length: 4}, () => Array(7).fill(0))
@@ -139,9 +192,7 @@ export function AnalyticsPage() {
       const weekIdx = 3 - Math.floor(dayDist / 7)
       const rDay = d.getDay() // 0 is Sunday
       const dayIdx = rDay === 0 ? 6 : rDay - 1 // M=0, S=6
-      const s = new Date(l.start_time || '').getTime()
-      const e = l.end_time ? new Date(l.end_time).getTime() : new Date().getTime()
-      heatData[weekIdx][dayIdx] += (e - s) / 3600000
+      heatData[weekIdx][dayIdx] += getLogDurationHours(l)
     }
   })
 
@@ -153,6 +204,8 @@ export function AnalyticsPage() {
     avgFocusData,
     subjectLabels,
     subjectData,
+    monthWeekdayLabels,
+    monthWeekdaySeries,
     planVsActualRef,
     subjectEffRef,
     focusTimeRef,
@@ -222,9 +275,22 @@ export function AnalyticsPage() {
               </div>
             ))}
           </div>
+
           <div className="card">
-            <div className="section-title">Monthly Subject Breakdown</div>
-            <div className="chart-wrap" style={{ height: 240 }}><canvas ref={monthRef} /></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+              <div className="section-title" style={{ marginBottom: 0 }}>Monthly Weekday Hours</div>
+              <CustomSelect
+                value={monthSubjectFilter}
+                onChange={setMonthSubjectFilter}
+                options={monthSubjectFilterOptions}
+                ariaLabel="Filter monthly weekday chart by subject"
+                style={{ width: 220, minWidth: 160 }}
+              />
+            </div>
+            <div style={{ fontSize: '11.5px', color: 'var(--text-soft)', marginBottom: 8 }}>
+              X-axis: weekdays, Y-axis: hours · Filter: {selectedMonthSubjectLabel}
+            </div>
+            <div className="chart-wrap" style={{ height: 280 }}><canvas ref={monthRef} /></div>
           </div>
         </div>
       )}
@@ -241,6 +307,8 @@ function useCharts(
   avgFocusData: number[], 
   subjectLabels: string[], 
   subjectData: number[],
+  monthLabels: string[],
+  monthData: number[],
   planVsActualRef: React.RefObject<HTMLCanvasElement | null>,
   subjectEffRef: React.RefObject<HTMLCanvasElement | null>,
   focusTimeRef: React.RefObject<HTMLCanvasElement | null>,
@@ -366,10 +434,44 @@ function useCharts(
       const Chart = window.Chart
       if (!Chart) return
       if (cancelled) return
-      
+
       if (monthRef.current) {
         destroyExistingOnCanvas(monthRef.current, Chart)
-        monthChart = new Chart(monthRef.current, { type: 'bar', data: { labels: weekLabels, datasets: [{ label: 'Monthly Hours Aggregate Placeholder', data: actualData, borderColor: '#4A5FA0', backgroundColor: 'rgba(74,95,160,.6)', borderWidth: 1, borderRadius: 4 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top', labels: { font: CHART_FONT, boxWidth: 9, boxHeight: 9, padding: 12 } } }, scales: { x: { ticks: { font: CHART_FONT }, grid: { display: false } }, y: { ticks: { font: CHART_FONT, callback: (v: number) => v+'h' }, grid: { color: 'rgba(100,80,50,.06)' }, beginAtZero: true } } } })
+        monthChart = new Chart(monthRef.current, {
+          type: 'bar',
+          data: {
+            labels: monthLabels,
+            datasets: [{
+              label: 'Hours by Weekday',
+              data: monthData,
+              borderColor: '#6B9B7A',
+              backgroundColor: 'rgba(107,155,122,.32)',
+              borderWidth: 1,
+              borderRadius: 4,
+            }],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: {
+                position: 'top',
+                labels: { font: CHART_FONT, boxWidth: 9, boxHeight: 9, padding: 12 },
+              },
+            },
+            scales: {
+              x: {
+                ticks: { font: CHART_FONT, maxTicksLimit: 10 },
+                grid: { display: false },
+              },
+              y: {
+                ticks: { font: CHART_FONT, callback: (v: number) => v + 'h' },
+                grid: { color: 'rgba(100,80,50,.06)' },
+                beginAtZero: true,
+              },
+            },
+          },
+        })
       }
     }
 
@@ -407,5 +509,5 @@ function useCharts(
       if (monthChart) monthChart.destroy()
       destroyAllKnownCharts()
     }
-  }, [tab, weekLabels, plannedData, actualData, avgFocusData, subjectLabels, subjectData, planVsActualRef, subjectEffRef, focusTimeRef, monthRef]) // Update when live data loads
+  }, [tab, weekLabels, plannedData, actualData, avgFocusData, subjectLabels, subjectData, monthLabels, monthData, planVsActualRef, subjectEffRef, focusTimeRef, monthRef]) // Update when live data loads
 }
