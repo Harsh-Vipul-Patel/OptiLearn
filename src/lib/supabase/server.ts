@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { getEmailLocalPart, normalizeOptionalEmail } from '@/lib/auth/email'
 
 function resolveSupabaseServerConfig() {
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -45,12 +46,13 @@ export async function getServerSession() {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return null
+    const normalizedEmail = normalizeOptionalEmail(user.email)
     const fallbackName =
       user.user_metadata?.name ||
       user.user_metadata?.full_name ||
-      user.email?.split('@')[0] ||
+      getEmailLocalPart(normalizedEmail) ||
       'User'
-    return { user: { id: user.id, email: user.email, name: fallbackName } }
+    return { user: { id: user.id, email: normalizedEmail, name: fallbackName } }
   } catch {
     return null
   }

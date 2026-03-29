@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { getEmailLocalPart, getFallbackUserEmail } from '@/lib/auth/email'
 
 const VALID_EXAM_TYPES = new Set(['JEE', 'NEET', 'Boards', 'Others'])
 const VALID_PREFERRED_TIMES = new Set(['Morning', 'Afternoon', 'Evening', 'Night'])
@@ -41,12 +42,12 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const fallbackEmail = getFallbackUserEmail(user.id, user.email)
     const fallbackName =
       user.user_metadata?.name ||
       user.user_metadata?.full_name ||
-      user.email?.split('@')[0] ||
+      getEmailLocalPart(fallbackEmail) ||
       'User'
-    const fallbackEmail = user.email || `${user.id}@local.invalid`
 
     const { data: profile, error } = await supabase
       .from('users')
@@ -105,8 +106,13 @@ export async function PUT(request: Request) {
     }
 
     const { name, exam_type, preferred_time } = await request.json()
-    const normalizedName = (name || '').trim() || user.user_metadata?.name || user.email?.split('@')[0] || 'User'
-    const normalizedEmail = user.email || `${user.id}@local.invalid`
+    const normalizedEmail = getFallbackUserEmail(user.id, user.email)
+    const normalizedName =
+      (typeof name === 'string' ? name.trim() : '') ||
+      user.user_metadata?.name ||
+      user.user_metadata?.full_name ||
+      getEmailLocalPart(normalizedEmail) ||
+      'User'
     const normalizedExamType = normalizeExamType(exam_type)
     const normalizedPreferredTime = normalizePreferredTime(preferred_time)
 

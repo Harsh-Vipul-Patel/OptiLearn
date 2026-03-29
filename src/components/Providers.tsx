@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
+import { getEmailLocalPart, normalizeOptionalEmail } from "@/lib/auth/email"
 
 /* ── Auth Session ── */
 type SessionContextType = {
@@ -47,7 +48,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     const meta = user.user_metadata || {}
     const metaName = (meta.name as string | undefined)?.trim()
     const metaFullName = (meta.full_name as string | undefined)?.trim()
-    const emailPrefix = (user.email || '').split('@')[0]?.trim()
+    const emailPrefix = getEmailLocalPart(user.email).trim()
     return metaName || metaFullName || emailPrefix || 'User'
   }
 
@@ -55,7 +56,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user) {
-        setSession({ user: { id: user.id, email: user.email, name: resolveDisplayName(user) } })
+        setSession({ user: { id: user.id, email: normalizeOptionalEmail(user.email), name: resolveDisplayName(user) } })
       } else {
         setSession(null)
       }
@@ -63,7 +64,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
       if (session?.user) {
-        setSession({ user: { id: session.user.id, email: session.user.email, name: resolveDisplayName(session.user) } })
+        setSession({ user: { id: session.user.id, email: normalizeOptionalEmail(session.user.email), name: resolveDisplayName(session.user) } })
       } else {
         setSession(null)
       }

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useSession, signOut } from '@/components/Providers'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { getEmailLocalPart } from '@/lib/auth/email'
 
 const NAV_ITEMS = [
   {
@@ -41,7 +42,7 @@ export function Sidebar() {
   const effectiveCollapsed = false
 
   const email    = session?.user?.email || ''
-  const emailPrefix = email.split('@')[0] || ''
+  const emailPrefix = getEmailLocalPart(email)
   const name     = session?.user?.name || emailPrefix || 'User'
   const initials = name.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()
 

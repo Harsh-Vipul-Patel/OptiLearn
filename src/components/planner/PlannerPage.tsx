@@ -560,6 +560,17 @@ export function PlannerPage() {
     setTimeout(finishAnimation, 780)
   }, [])
 
+  const resetFormFields = useCallback(() => {
+    setQaTopic('')
+    setQaTime('Morning')
+    setQaUseCustomTime(false)
+    setQaStartTime('09:00')
+    setQaEndTime('10:00')
+    setQaDur(60)
+    setQaDiff('Medium')
+    setQaGoal('Learn')
+  }, [])
+
   const addBlockFromForm = useCallback(() => {
     const editingBlock = editingBlockId ? planBlocks.find(b => b.id === editingBlockId) : null
 
@@ -827,18 +838,7 @@ export function PlannerPage() {
     }
     setTimeout(() => animateSubjectToSlot(sid, newBlocks[0].time), 80)
     resetFormFields()
-  }, [editingBlockId, qaSubject, qaTopic, qaTime, qaUseCustomTime, qaStartTime, qaEndTime, qaDur, qaDiff, qaGoal, subjects, hasTimeConflict, showToast, animateSubjectToSlot, slotRanges, planBlocks])
-
-  const resetFormFields = useCallback(() => {
-    setQaTopic('')
-    setQaTime('Morning')
-    setQaUseCustomTime(false)
-    setQaStartTime('09:00')
-    setQaEndTime('10:00')
-    setQaDur(60)
-    setQaDiff('Medium')
-    setQaGoal('Learn')
-  }, [])
+  }, [editingBlockId, qaSubject, qaTopic, qaTime, qaUseCustomTime, qaStartTime, qaEndTime, qaDur, qaDiff, qaGoal, subjects, hasTimeConflict, showToast, animateSubjectToSlot, slotRanges, planBlocks, resetFormFields])
 
   const confirmSplitSession = useCallback(() => {
     if (!pendingSplitConfirmation) return

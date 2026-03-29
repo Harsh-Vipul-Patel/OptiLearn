@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient, getServerSession } from '@/lib/supabase/server'
+import { getEmailLocalPart, getFallbackUserEmail } from '@/lib/auth/email'
 
 export async function GET() {
   try {
@@ -44,23 +45,21 @@ export async function POST(request: Request) {
     const supabase = await createClient()
 
     // Keep public.users in sync for FK/RLS dependencies.
-    if (session.user.email) {
-      const { error: userError } = await supabase
-        .from('users')
-        .upsert(
-          [{
-            user_id: session.user.id,
-            email: session.user.email,
-            name: session.user.name || session.user.email || 'User',
-          }],
-          { onConflict: 'user_id' }
-        )
+    const normalizedEmail = getFallbackUserEmail(session.user.id, session.user.email)
+    const normalizedName = (session.user.name || '').trim() || getEmailLocalPart(normalizedEmail) || 'User'
+    const { error: userError } = await supabase
+      .from('users')
+      .upsert(
+        [{
+          user_id: session.user.id,
+          email: normalizedEmail,
+          name: normalizedName,
+        }],
+        { onConflict: 'user_id' }
+      )
 
-      if (userError) {
-        console.error('[subjects/POST - user upsert]', userError)
-      }
-    } else {
-      console.warn('[subjects/POST] session user has no email; skipping users upsert')
+    if (userError) {
+      console.error('[subjects/POST - user upsert]', userError)
     }
 
     const { data: subject, error } = await supabase

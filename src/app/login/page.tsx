@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { normalizeEmail, validateEmail } from '@/lib/auth/email'
 import { LockIcon, MailIcon, SparklesIcon, UserIcon, UserWaveIcon } from '@/components/ui/AppIcons'
 
 export default function LoginPage() {
@@ -12,15 +13,32 @@ export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
   const [loading, setLoading] = useState(false)
   const [isRegister, setIsRegister] = useState(false)
   const [name, setName] = useState('')
 
   const handleLogin = async () => {
-    if (!email || !password) { setError('Please fill in all fields.'); return }
-    setLoading(true); setError('')
-    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password })
+    if (loading) return
+
+    const normalizedEmail = normalizeEmail(email)
+
+    if (!normalizedEmail || !password) { setError('Please fill in all fields.'); setSuccess(''); return }
+
+    const emailValidation = validateEmail(normalizedEmail)
+    if (!emailValidation.isValid) {
+      setError(emailValidation.error || 'Enter a valid email address.')
+      setSuccess('')
+      return
+    }
+
+    setLoading(true)
+    setError('')
+    setSuccess('')
+
+    const { error: signInError } = await supabase.auth.signInWithPassword({ email: emailValidation.normalizedEmail, password })
     setLoading(false)
+
     if (signInError) {
       setError(signInError.message || 'Incorrect email or password.')
     } else {
@@ -29,20 +47,49 @@ export default function LoginPage() {
   }
 
   const handleRegister = async () => {
-    if (!name || !email || !password) { setError('Please fill in all fields.'); return }
-    setLoading(true); setError('')
-    const { error: signUpError } = await supabase.auth.signUp({
-      email,
+    if (loading) return
+
+    const normalizedName = name.trim()
+    const normalizedEmail = normalizeEmail(email)
+
+    if (!normalizedName || !normalizedEmail || !password) { setError('Please fill in all fields.'); setSuccess(''); return }
+
+    const emailValidation = validateEmail(normalizedEmail)
+    if (!emailValidation.isValid) {
+      setError(emailValidation.error || 'Enter a valid email address.')
+      setSuccess('')
+      return
+    }
+
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters long.')
+      setSuccess('')
+      return
+    }
+
+    setLoading(true)
+    setError('')
+    setSuccess('')
+
+    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+      email: emailValidation.normalizedEmail,
       password,
       options: {
-        data: { name, full_name: name }
+        data: { name: normalizedName, full_name: normalizedName }
       }
     })
     setLoading(false)
+
     if (signUpError) {
       setError(signUpError.message || 'Registration failed.')
     } else {
-      router.push('/dashboard')
+      if (signUpData.session) {
+        router.push('/dashboard')
+      } else {
+        setIsRegister(false)
+        setPassword('')
+        setSuccess('Account created. Please verify your email before logging in.')
+      }
     }
   }
 
@@ -77,16 +124,16 @@ export default function LoginPage() {
           {isRegister && (
             <div className="login-input-wrap">
               <span className="login-input-icon"><UserIcon width={14} height={14} /></span>
-              <input className="login-input" type="text" placeholder="Full name" value={name} onChange={e => setName(e.target.value)} autoComplete="name" />
+              <input className="login-input" type="text" placeholder="Full name" value={name} onChange={e => { setName(e.target.value); if (error) setError(''); if (success) setSuccess('') }} autoComplete="name" />
             </div>
           )}
           <div className="login-input-wrap">
             <span className="login-input-icon"><MailIcon width={14} height={14} /></span>
-            <input className="login-input" type="email" placeholder="Email address" value={email} onChange={e => setEmail(e.target.value)} autoComplete="email" />
+            <input className="login-input" type="email" placeholder="Email address" value={email} onChange={e => { setEmail(e.target.value); if (error) setError(''); if (success) setSuccess('') }} onBlur={() => setEmail(current => normalizeEmail(current))} autoComplete="email" inputMode="email" autoCapitalize="none" />
           </div>
           <div className="login-input-wrap">
             <span className="login-input-icon"><LockIcon width={14} height={14} /></span>
-            <input className="login-input" type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} autoComplete={isRegister ? 'new-password' : 'current-password'} onKeyDown={e => e.key === 'Enter' && (isRegister ? handleRegister() : handleLogin())} />
+            <input className="login-input" type="password" placeholder="Password" value={password} onChange={e => { setPassword(e.target.value); if (error) setError(''); if (success) setSuccess('') }} autoComplete={isRegister ? 'new-password' : 'current-password'} onKeyDown={e => e.key === 'Enter' && (isRegister ? handleRegister() : handleLogin())} />
           </div>
 
           <button className="btn-primary" style={{ width: '100%', justifyContent: 'center', padding: 14 }} onClick={isRegister ? handleRegister : handleLogin} disabled={loading}>
@@ -99,9 +146,15 @@ export default function LoginPage() {
             </div>
           )}
 
+          {success && (
+            <div style={{ fontSize: 13, color: '#24745A', textAlign: 'center' }}>
+              {success}
+            </div>
+          )}
+
           <div className="login-divider"><span>or continue with</span></div>
 
-          <button className="btn-secondary" style={{ width: '100%', justifyContent: 'center' }} onClick={handleGoogle}>
+          <button className="btn-secondary" style={{ width: '100%', justifyContent: 'center' }} onClick={handleGoogle} disabled={loading}>
             <GoogleIcon />
             Continue with Google
           </button>
@@ -109,7 +162,7 @@ export default function LoginPage() {
 
         <div style={{ textAlign: 'center', marginTop: 18, fontSize: 13, color: 'var(--text-soft)' }}>
           {isRegister ? 'Already have an account? ' : "Don't have an account? "}
-          <button onClick={() => { setIsRegister(!isRegister); setError('') }} style={{ color: 'var(--terra)', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', fontSize: 13 }}>
+          <button onClick={() => { setIsRegister(!isRegister); setError(''); setSuccess('') }} style={{ color: 'var(--terra)', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', fontSize: 13 }}>
             {isRegister ? 'Log in' : 'Sign up free'}
           </button>
         </div>

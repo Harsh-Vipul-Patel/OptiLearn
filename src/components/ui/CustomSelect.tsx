@@ -56,6 +56,19 @@ export function CustomSelect({
     [options, value]
   )
 
+  const defaultHighlightedIndex = useMemo(() => {
+    const selectedIndex = options.findIndex((option) => option.value === value && !option.disabled)
+    if (selectedIndex >= 0) return selectedIndex
+    return options.findIndex((option) => !option.disabled)
+  }, [options, value])
+
+  const activeHighlightedIndex =
+    highlightedIndex >= 0 &&
+    highlightedIndex < options.length &&
+    !options[highlightedIndex]?.disabled
+      ? highlightedIndex
+      : defaultHighlightedIndex
+
   const closeMenu = () => {
     setOpen(false)
     setHighlightedIndex(-1)
@@ -81,22 +94,9 @@ export function CustomSelect({
   }, [])
 
   useEffect(() => {
-    if (!open) return
-
-    const selectedIndex = options.findIndex((option) => option.value === value && !option.disabled)
-    if (selectedIndex >= 0) {
-      setHighlightedIndex(selectedIndex)
-      return
-    }
-
-    const firstEnabled = options.findIndex((option) => !option.disabled)
-    setHighlightedIndex(firstEnabled)
-  }, [open, options, value])
-
-  useEffect(() => {
-    if (!open || highlightedIndex < 0) return
-    optionRefs.current[highlightedIndex]?.scrollIntoView({ block: 'nearest' })
-  }, [open, highlightedIndex])
+    if (!open || activeHighlightedIndex < 0) return
+    optionRefs.current[activeHighlightedIndex]?.scrollIntoView({ block: 'nearest' })
+  }, [open, activeHighlightedIndex])
 
   useEffect(() => {
     if (!open) return
@@ -160,14 +160,15 @@ export function CustomSelect({
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault()
       const direction = event.key === 'ArrowDown' ? 1 : -1
-      const next = findNextEnabledIndex(options, highlightedIndex < 0 ? 0 : highlightedIndex, direction)
+      const baseIndex = activeHighlightedIndex < 0 ? (direction === 1 ? -1 : 0) : activeHighlightedIndex
+      const next = findNextEnabledIndex(options, baseIndex, direction)
       if (next >= 0) setHighlightedIndex(next)
       return
     }
 
-    if ((event.key === 'Enter' || event.key === ' ') && highlightedIndex >= 0) {
+    if ((event.key === 'Enter' || event.key === ' ') && activeHighlightedIndex >= 0) {
       event.preventDefault()
-      const option = options[highlightedIndex]
+      const option = options[activeHighlightedIndex]
       if (option) selectOption(option)
     }
   }
@@ -204,7 +205,7 @@ export function CustomSelect({
         >
           {options.map((option, index) => {
             const isSelected = option.value === value
-            const isHighlighted = index === highlightedIndex
+            const isHighlighted = index === activeHighlightedIndex
             const optionClass = [
               'custom-select-option',
               isSelected ? 'is-selected' : '',
