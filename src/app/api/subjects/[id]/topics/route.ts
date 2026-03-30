@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/supabase/server'
+import { getAuthUser } from '@/lib/auth/jwt'
 import { TopicsService } from '@/services/topics.service'
 import { createClient } from '@/lib/supabase/server'
 
@@ -9,20 +9,19 @@ export async function GET(
 ) {
   try {
     const { id: subjectId } = await params
-    const session = await getServerSession()
-    if (!session?.user) {
+    const user = getAuthUser(request)
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Verify ownership of the subject
-    const supabase = await createClient()
+    const supabase = createClient()
     const { data: subject } = await supabase
       .from('subject')
       .select('*')
       .eq('subject_id', subjectId)
       .single()
       
-    if (!subject || subject.user_id !== session.user.id) {
+    if (!subject || subject.user_id !== user.id) {
        return NextResponse.json({ error: 'Unauthorized or Subject not found' }, { status: 403 })
     }
 
@@ -43,20 +42,19 @@ export async function POST(
 ) {
   try {
     const { id: subjectId } = await params
-    const session = await getServerSession()
-    if (!session?.user) {
+    const user = getAuthUser(request)
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Verify ownership
-    const supabase = await createClient()
+    const supabase = createClient()
     const { data: subject } = await supabase
       .from('subject')
       .select('*')
       .eq('subject_id', subjectId)
       .single()
       
-    if (!subject || subject.user_id !== session.user.id) {
+    if (!subject || subject.user_id !== user.id) {
        return NextResponse.json({ error: 'Unauthorized or Subject not found' }, { status: 403 })
     }
 

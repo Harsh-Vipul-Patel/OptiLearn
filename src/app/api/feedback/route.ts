@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/supabase/server'
+import { getAuthUser } from '@/lib/auth/jwt'
 
 import { FeedbackService } from '@/services/feedback.service'
 
 export async function POST(request: Request) {
   try {
-    const session = await getServerSession()
-    if (!session?.user) {
+    const user = getAuthUser(request)
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 

@@ -1,5 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { getEmailLocalPart, getFallbackUserEmail, validateEmail } from '@/lib/auth/email'
+import { hashPassword } from '@/lib/auth/password'
+import crypto from 'crypto'
 
 function normalizeExamType(value?: string): string | null {
   if (!value) return null
@@ -29,7 +31,7 @@ function normalizePreferredTime(value?: string): string | null {
 
 export class AuthService {
   static async registerUser(data: { email: string, password: string, name?: string, exam_type?: string, preferred_time?: string }) {
-    const supabase = await createClient()
+    const supabase = createClient()
     const normalizedName = (data.name || '').trim()
     const emailValidation = validateEmail(data.email)
 
@@ -64,39 +66,19 @@ export class AuthService {
       throw new Error('User already exists')
     }
 
-    const { data: authSignUp, error: signUpError } = await supabase.auth.signUp({
-      email: normalizedEmail,
-      password: data.password,
-      options: {
-        data: {
-          name: resolvedName,
-          full_name: resolvedName,
-        },
-      },
-    })
+    const passwordHash = await hashPassword(data.password)
+    const userId = crypto.randomUUID()
 
-    if (signUpError) {
-      const message = (signUpError.message || '').toLowerCase()
-      if (message.includes('already') || message.includes('exists') || message.includes('registered')) {
-        throw new Error('User already exists')
-      }
-      throw new Error(signUpError.message)
-    }
-
-    const authUserId = authSignUp.user?.id
-    if (!authUserId) {
-      throw new Error('Account created. Please verify your email to complete signup.')
-    }
-
-    const persistedEmail = getFallbackUserEmail(authUserId, normalizedEmail)
+    const persistedEmail = getFallbackUserEmail(userId, normalizedEmail)
 
     const { data: user, error } = await supabase
       .from('users')
       .upsert(
         [{
-          user_id: authUserId,
+          user_id: userId,
           email: persistedEmail,
           name: resolvedName,
+          password_hash: passwordHash,
           exam_type: normalizedExamType,
           preferred_study_time: normalizedPreferredTime,
         }],

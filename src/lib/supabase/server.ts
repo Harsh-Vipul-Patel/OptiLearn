@@ -1,59 +1,22 @@
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
-import { getEmailLocalPart, normalizeOptionalEmail } from '@/lib/auth/email'
-
-function resolveSupabaseServerConfig() {
-  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  return { url, key }
-}
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 
 /**
- * Server-side Supabase client.
- * Uses SUPABASE_URL / SUPABASE_ANON_KEY (no NEXT_PUBLIC_ prefix)
- * so these values are never bundled into the browser JavaScript.
+ * Server-side Supabase client using the SERVICE ROLE KEY.
+ * This bypasses Row Level Security and talks directly to the database.
+ * No dependency on Supabase Auth — authentication is handled by our JWT system.
  */
-export async function createClient() {
-  const cookieStore = await cookies()
+export function createClient() {
+  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-  const { url: supabaseUrl, key: supabaseKey } = resolveSupabaseServerConfig()
-
-  if (!supabaseUrl || !supabaseKey) {
-    throw new Error('Supabase server configuration is missing')
+  if (!url || !key) {
+    throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be configured')
   }
 
-  return createServerClient(supabaseUrl, supabaseKey, {
-    cookies: {
-      getAll() {
-        return cookieStore.getAll()
-      },
-      setAll(cookiesToSet) {
-        try {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options)
-          )
-        } catch {
-          // The `setAll` method was called from a Server Component.
-          // This can be ignored if you have middleware refreshing user sessions.
-        }
-      },
+  return createSupabaseClient(url, key, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
     },
   })
-}
-
-export async function getServerSession() {
-  try {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return null
-    const normalizedEmail = normalizeOptionalEmail(user.email)
-    const fallbackName =
-      user.user_metadata?.name ||
-      user.user_metadata?.full_name ||
-      getEmailLocalPart(normalizedEmail) ||
-      'User'
-    return { user: { id: user.id, email: normalizedEmail, name: fallbackName } }
-  } catch {
-    return null
-  }
 }

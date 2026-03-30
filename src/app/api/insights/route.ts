@@ -1,21 +1,21 @@
 import { NextResponse } from 'next/server'
-import { getServerSession } from '@/lib/supabase/server'
+import { getAuthUser } from '@/lib/auth/jwt'
 import { createClient } from '@/lib/supabase/server'
 
 import { InsightsService } from '@/services/insights.service'
 import { triggerTodayInsights, triggerAIInsights } from '@/lib/engineClient'
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const session = await getServerSession()
-    if (!session?.user) {
+    const user = getAuthUser(request)
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const todaySuggestions = await InsightsService.getTodaySuggestions(session.user.id, 20)
+    const todaySuggestions = await InsightsService.getTodaySuggestions(user.id, 20)
     const suggestions = todaySuggestions.length > 0
       ? todaySuggestions
-      : await InsightsService.getSuggestions(session.user.id, 20)
+      : await InsightsService.getSuggestions(user.id, 20)
 
     return NextResponse.json({ suggestions }, { status: 200 })
   } catch (error) {
@@ -27,17 +27,16 @@ export async function GET() {
   }
 }
 
-export async function POST() {
+export async function POST(request: Request) {
   try {
-    const session = await getServerSession()
-    if (!session?.user) {
+    const user = getAuthUser(request)
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const userId = session.user.id
+    const userId = user.id
     console.log('[insights/POST] Generating insights for user:', userId)
 
-    // ── 1. Call the Python engine (AI-first, fallback to regular) ─────
     let engineResult: {
       status?: string
       recommendations?: string[]
@@ -69,7 +68,6 @@ export async function POST() {
       }
     }
 
-    // ── 2. Collect ALL recommendations from engine response ───────
     const allRecs: string[] = []
 
     if (Array.isArray(engineResult.recommendations)) {
@@ -88,7 +86,6 @@ export async function POST() {
       }
     }
 
-    // ── 2b. Default insights when engine has no data ─────────────
     if (allRecs.length === 0) {
       console.log('[insights/POST] Engine returned 0 recommendations — using starter insights')
       allRecs.push(
@@ -102,9 +99,8 @@ export async function POST() {
 
     console.log('[insights/POST] Total recommendations to persist:', allRecs.length)
 
-    // ── 3. Always persist engine recommendations to DB ─────────────
     if (allRecs.length > 0) {
-      const supabase = await createClient()
+      const supabase = createClient()
 
       const inserts = allRecs.map((text) => ({
         user_id: userId,
@@ -119,7 +115,6 @@ export async function POST() {
 
       if (insertErr) {
         console.warn('[insights/POST] suggestion insert failed:', insertErr.message)
-        // Try legacy plural table name
         const legacyInserts = allRecs.map((text) => ({
           user_id: userId,
           log_id: null,
@@ -137,13 +132,11 @@ export async function POST() {
       }
     }
 
-    // ── 4. Read back persisted suggestions ──────────────────────────
     const todaySuggestions = await InsightsService.getTodaySuggestions(userId, 20)
     let suggestions = todaySuggestions.length > 0
       ? todaySuggestions
       : await InsightsService.getSuggestions(userId, 20)
 
-    // ── 5. If DB still empty, return in-memory recs as suggestions ──
     if (suggestions.length === 0 && allRecs.length > 0) {
       console.log('[insights/POST] DB empty — returning in-memory recommendations')
       suggestions = allRecs.map((text, i) => ({

@@ -13,7 +13,7 @@ type LogWithOwnership = {
 export class LogsService {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   static async createLog(data: any) {
-    const { data: log, error } = await (await createClient())
+    const { data: log, error } = await createClient()
       .from('study_log')
       .insert([data])
       .select()
@@ -24,7 +24,7 @@ export class LogsService {
   }
 
   static async getLogs(userId: string) {
-    const { data, error } = await (await createClient())
+    const { data, error } = await createClient()
       .from('study_log')
       .select(`
         *,
@@ -51,7 +51,7 @@ export class LogsService {
   }
 
   static async getPlanDetailsForAnalysis(planId: string) {
-    const { data: plan, error } = await (await createClient())
+    const { data: plan, error } = await createClient()
       .from('daily_plan')
       .select(`
         target_duration,

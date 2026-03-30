@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 
 export class InsightsService {
   static async getTodaySuggestions(userId: string, limit = 20) {
-    const supabase = await createClient()
+    const supabase = createClient()
     const startOfDay = new Date()
     startOfDay.setHours(0, 0, 0, 0)
     const startIso = startOfDay.toISOString()
@@ -47,7 +47,7 @@ export class InsightsService {
   }
 
   static async getSuggestions(userId: string, limit = 5) {
-    const supabase = await createClient()
+    const supabase = createClient()
 
     const { data, error } = await supabase
       .from('suggestion')

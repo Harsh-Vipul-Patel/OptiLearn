@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 
 export class PlansService {
   static async getPlans(userId: string, date?: string | null, includeLogged = true) {
-    const supabase = await createClient()
+    const supabase = createClient()
     let query = supabase
       .from('daily_plan')
       .select(`
@@ -31,7 +31,7 @@ export class PlansService {
   }
 
   static async createPlan(data: { topic_id: string, target_duration: number, time_slot?: string, plan_date: string, goal_type?: string, start_time?: string, end_time?: string }) {
-    const { data: plan, error } = await (await createClient())
+    const { data: plan, error } = await createClient()
       .from('daily_plan')
       .insert([{
         topic_id: data.topic_id,
@@ -53,7 +53,7 @@ export class PlansService {
     planId: string,
     data: { topic_id: string, target_duration: number, time_slot?: string | null, plan_date: string, goal_type?: string | null, start_time?: string | null, end_time?: string | null }
   ) {
-    const { data: plan, error } = await (await createClient())
+    const { data: plan, error } = await createClient()
       .from('daily_plan')
       .update({
         topic_id: data.topic_id,

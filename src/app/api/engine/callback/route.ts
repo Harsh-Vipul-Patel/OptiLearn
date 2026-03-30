@@ -6,19 +6,9 @@ import { createClient } from '@/lib/supabase/server'
  *
  * Called by the Python engine (Azure App Service) after it finishes analysis.
  * Authenticated via `x-engine-key` header (shared secret, never exposes user session).
- *
- * Body: {
- *   log_id: string,
- *   user_id: string,
- *   efficiency: number,
- *   throughput: number,
- *   quality_score: number,
- *   recommendations: string[]
- * }
  */
 export async function POST(request: Request) {
   try {
-    // ── Auth: verify engine secret ──────────────────────────────────
     const engineKey = request.headers.get('x-engine-key')
     if (!engineKey || engineKey !== process.env.ENGINE_API_KEY) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
@@ -31,11 +21,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'log_id and user_id are required' }, { status: 400 })
     }
 
-    const supabase = await createClient()
+    const supabase = createClient()
 
     let analysisId: string | null = null
 
-    // ── 1. Persist analysis (supports both schema variants) ─────────────
     const analysisInsert = await supabase
       .from('study_log_analysis')
       .insert([{
@@ -51,7 +40,6 @@ export async function POST(request: Request) {
     if (!analysisInsert.error) {
       analysisId = analysisInsert.data?.analysis_id || null
     } else {
-      // Fallback for schemas where metrics live directly on study log rows.
       const metrics = {
         efficiency: efficiency ?? null,
         throughput: throughput ?? null,
@@ -77,7 +65,6 @@ export async function POST(request: Request) {
       }
     }
 
-    // ── 2. Insert AI suggestions ────────────────────────────────────
     if (Array.isArray(recommendations) && recommendations.length > 0) {
       const inserts = recommendations.map((text: string) => ({
         user_id,

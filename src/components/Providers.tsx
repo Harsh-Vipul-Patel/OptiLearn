@@ -1,13 +1,12 @@
 "use client"
 
 import { createContext, useContext, useEffect, useState } from "react"
-import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
-import { getEmailLocalPart, normalizeOptionalEmail } from "@/lib/auth/email"
 
 /* ── Auth Session ── */
+type SessionUser = { id: string; email?: string; name?: string }
 type SessionContextType = {
-  data: { user: { id: string; email?: string; name?: string } } | null
+  data: { user: SessionUser } | null
 }
 
 const SessionContext = createContext<SessionContextType>({ data: null })
@@ -26,13 +25,10 @@ const SidebarContext = createContext<SidebarContextType>({
 export function Providers({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<SessionContextType["data"]>(null)
   const [collapsed, setCollapsed] = useState(true)
-  const supabase = createClient()
   const router = useRouter()
 
   useEffect(() => {
     const stored = localStorage.getItem('ol_sidebar_collapsed')
-    // Intentional post-hydration sync from persisted client preference.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCollapsed(stored === 'false' ? false : true)
   }, [])
 
@@ -44,35 +40,19 @@ export function Providers({ children }: { children: React.ReactNode }) {
     })
   }
 
-  const resolveDisplayName = (user: { email?: string; user_metadata?: Record<string, unknown> }) => {
-    const meta = user.user_metadata || {}
-    const metaName = (meta.name as string | undefined)?.trim()
-    const metaFullName = (meta.full_name as string | undefined)?.trim()
-    const emailPrefix = getEmailLocalPart(user.email).trim()
-    return metaName || metaFullName || emailPrefix || 'User'
-  }
-
-  /* Auth */
+  /* Auth — fetch current user from JWT cookie */
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) {
-        setSession({ user: { id: user.id, email: normalizeOptionalEmail(user.email), name: resolveDisplayName(user) } })
-      } else {
-        setSession(null)
-      }
-    })
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
-      if (session?.user) {
-        setSession({ user: { id: session.user.id, email: normalizeOptionalEmail(session.user.email), name: resolveDisplayName(session.user) } })
-      } else {
-        setSession(null)
-      }
-      router.refresh()
-    })
-
-    return () => subscription.unsubscribe()
-  }, [supabase, router])
+    fetch('/api/auth/me', { credentials: 'include' })
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data?.user) {
+          setSession({ user: data.user })
+        } else {
+          setSession(null)
+        }
+      })
+      .catch(() => setSession(null))
+  }, [])
 
   return (
     <SidebarContext.Provider value={{ collapsed, toggleSidebar }}>
@@ -87,7 +67,6 @@ export const useSession = () => useContext(SessionContext)
 export const useSidebar = () => useContext(SidebarContext)
 
 export const signOut = async () => {
-  const supabase = createClient()
-  await supabase.auth.signOut()
+  await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
   window.location.href = '/'
 }

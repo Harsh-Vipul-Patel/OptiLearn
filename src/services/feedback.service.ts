@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 
 export class FeedbackService {
   static async submitFeedback(suggestionId: string, reaction: string) {
-    const { data, error } = await (await createClient())
+    const { data, error } = await createClient()
       .from('feedback')
       .insert([{
         suggestion_id: suggestionId,

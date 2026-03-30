@@ -1,16 +1,22 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { Suspense, useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/client'
 import { normalizeEmail, validateEmail } from '@/lib/auth/email'
 import { LockIcon, MailIcon, SparklesIcon, UserIcon, UserWaveIcon } from '@/components/ui/AppIcons'
 
 export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginPageInner />
+    </Suspense>
+  )
+}
+
+function LoginPageInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const supabase = createClient()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -19,13 +25,31 @@ export default function LoginPage() {
   const [isRegister, setIsRegister] = useState(false)
   const [name, setName] = useState('')
 
-  // Show a friendly error if redirected back from a failed auth callback
+  // Show a friendly error if redirected back from a failed auth
   useEffect(() => {
-    if (searchParams.get('error') === 'auth-callback-failed') {
-      setError('Sign-in failed — the authentication service may be temporarily unavailable. Please try again.')
+    const err = searchParams.get('error')
+    if (err === 'auth-callback-failed') {
+      setError('Sign-in failed. Please try again.')
+    } else if (err === 'session-expired') {
+      setError('Your session has expired. Please log in again.')
     }
   }, [searchParams])
 
+  // Load Google Identity Services script
+  useEffect(() => {
+    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID
+    if (!clientId) return
+
+    const script = document.createElement('script')
+    script.src = 'https://accounts.google.com/gsi/client'
+    script.async = true
+    script.defer = true
+    document.head.appendChild(script)
+
+    return () => {
+      document.head.removeChild(script)
+    }
+  }, [])
 
   const handleLogin = async () => {
     if (loading) return
@@ -45,13 +69,25 @@ export default function LoginPage() {
     setError('')
     setSuccess('')
 
-    const { error: signInError } = await supabase.auth.signInWithPassword({ email: emailValidation.normalizedEmail, password })
-    setLoading(false)
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: emailValidation.normalizedEmail, password }),
+      })
 
-    if (signInError) {
-      setError(signInError.message || 'Incorrect email or password.')
-    } else {
-      router.push('/dashboard')
+      const data = await res.json()
+
+      if (!res.ok) {
+        setError(data.error || 'Incorrect email or password.')
+      } else {
+        router.push('/dashboard')
+        router.refresh()
+      }
+    } catch {
+      setError('Network error. Please try again.')
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -59,11 +95,11 @@ export default function LoginPage() {
     if (loading) return
 
     const normalizedName = name.trim()
-    const normalizedEmail = normalizeEmail(email)
+    const normalizedEmailVal = normalizeEmail(email)
 
-    if (!normalizedName || !normalizedEmail || !password) { setError('Please fill in all fields.'); setSuccess(''); return }
+    if (!normalizedName || !normalizedEmailVal || !password) { setError('Please fill in all fields.'); setSuccess(''); return }
 
-    const emailValidation = validateEmail(normalizedEmail)
+    const emailValidation = validateEmail(normalizedEmailVal)
     if (!emailValidation.isValid) {
       setError(emailValidation.error || 'Enter a valid email address.')
       setSuccess('')
@@ -80,25 +116,25 @@ export default function LoginPage() {
     setError('')
     setSuccess('')
 
-    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-      email: emailValidation.normalizedEmail,
-      password,
-      options: {
-        data: { name: normalizedName, full_name: normalizedName }
-      }
-    })
-    setLoading(false)
+    try {
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: normalizedName, email: emailValidation.normalizedEmail, password }),
+      })
 
-    if (signUpError) {
-      setError(signUpError.message || 'Registration failed.')
-    } else {
-      if (signUpData.session) {
-        router.push('/dashboard')
+      const data = await res.json()
+
+      if (!res.ok) {
+        setError(data.error || 'Registration failed.')
       } else {
-        setIsRegister(false)
-        setPassword('')
-        setSuccess('Account created. Please verify your email before logging in.')
+        router.push('/dashboard')
+        router.refresh()
       }
+    } catch {
+      setError('Network error. Please try again.')
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -107,47 +143,58 @@ export default function LoginPage() {
     setError('')
     setSuccess('')
 
-    // Check if Supabase is reachable before redirecting
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const maxRetries = 3
-    let reachable = false
-
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        const controller = new AbortController()
-        const timeout = setTimeout(() => controller.abort(), 5000)
-        const res = await fetch(`${supabaseUrl}/auth/v1/health`, {
-          method: 'GET',
-          signal: controller.signal,
-        })
-        clearTimeout(timeout)
-        if (res.ok) { reachable = true; break }
-      } catch {
-        // Supabase unreachable, retry after delay
-      }
-      if (attempt < maxRetries) {
-        setError(`Authentication service is waking up… retrying (${attempt}/${maxRetries})`)
-        await new Promise(r => setTimeout(r, 2000))
-      }
-    }
-
-    if (!reachable) {
+    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID
+    if (!clientId) {
+      setError('Google sign-in is not configured.')
       setLoading(false)
-      setError('Authentication service is temporarily unavailable. Please try again in a minute.')
       return
     }
 
-    setError('')
-    const { error: oauthError } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback?next=/dashboard`,
-      },
-    })
+    try {
+      // Use Google Identity Services to get an ID token via popup
+      const google = (window as unknown as { google?: { accounts: { id: { initialize: (config: { client_id: string; callback: (response: { credential: string }) => void; auto_select?: boolean }) => void; prompt: () => void } } } }).google
 
-    if (oauthError) {
+      if (!google) {
+        setError('Google sign-in is loading. Please try again in a moment.')
+        setLoading(false)
+        return
+      }
+
+      google.accounts.id.initialize({
+        client_id: clientId,
+        callback: async (response: { credential: string }) => {
+          try {
+            const res = await fetch('/api/auth/google', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ id_token: response.credential }),
+            })
+
+            const data = await res.json()
+
+            if (!res.ok) {
+              setError(data.error || 'Google sign-in failed.')
+              setLoading(false)
+            } else {
+              router.push('/dashboard')
+              router.refresh()
+            }
+          } catch {
+            setError('Network error during Google sign-in.')
+            setLoading(false)
+          }
+        },
+      })
+
+      google.accounts.id.prompt()
+
+      // If the prompt doesn't show (e.g. user dismissed it before), use the button flow
+      setTimeout(() => {
+        if (loading) setLoading(false)
+      }, 10000)
+    } catch {
+      setError('Google sign-in failed. Please try again.')
       setLoading(false)
-      setError('Could not connect to Google Sign-In. Please try again.')
     }
   }
 

@@ -1,61 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { getEmailLocalPart, normalizeOptionalEmail } from '@/lib/auth/email'
+import { getAuthUser, type AuthUser } from '@/lib/auth/jwt'
 
 import { PlansService } from '@/services/plans.service'
-
-type SessionUser = { id: string; email?: string; name: string }
-
-function isSessionMissingError(message: string) {
-  const text = message.toLowerCase()
-  return text.includes('auth session missing') || text.includes('jwt')
-}
-
-function isAuthNetworkError(message: string) {
-  const text = message.toLowerCase()
-  return text.includes('fetch failed') || text.includes('econnreset') || text.includes('etimedout') || text.includes('network')
-}
-
-async function getRouteSessionUser(): Promise<SessionUser | null> {
-  const supabase = await createClient()
-
-  try {
-    const { data: { user }, error } = await supabase.auth.getUser()
-
-    if (error) {
-      if (isSessionMissingError(error.message || '')) return null
-      throw new Error(error.message)
-    }
-
-    if (!user) return null
-
-    const normalizedEmail = normalizeOptionalEmail(user.email)
-
-    const fallbackName =
-      user.user_metadata?.name ||
-      user.user_metadata?.full_name ||
-      getEmailLocalPart(normalizedEmail) ||
-      'User'
-
-    return { id: user.id, email: normalizedEmail, name: fallbackName }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    if (isAuthNetworkError(message)) {
-      throw new Error(`AUTH_NETWORK_ERROR: ${message}`)
-    }
-    throw error
-  }
-}
-
-function handlePlansRouteError(error: unknown) {
-  const message = error instanceof Error ? error.message : 'Unknown error'
-
-  if (message.toLowerCase().includes('auth_network_error')) {
-    return NextResponse.json({ error: 'Auth service temporarily unavailable. Please retry.' }, { status: 503 })
-  }
-
-  return NextResponse.json({ error: message }, { status: 400 })
-}
 
 function normalizeTimeSlot(value?: string | null) {
   if (!value) return null
@@ -65,7 +12,6 @@ function normalizeTimeSlot(value?: string | null) {
     return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase()
   }
 
-  // Convert planner timeline hour (HH:MM) into enum expected by DB.
   const hour = Number(value.split(':')[0])
   if (!Number.isFinite(hour)) return null
   if (hour >= 4 && hour < 11) return 'Morning'
@@ -74,9 +20,13 @@ function normalizeTimeSlot(value?: string | null) {
   return 'Night'
 }
 
+function getRouteUser(request: Request): AuthUser | null {
+  return getAuthUser(request)
+}
+
 export async function GET(request: Request) {
   try {
-    const user = await getRouteSessionUser()
+    const user = getRouteUser(request)
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -90,18 +40,19 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ plans }, { status: 200 })
   } catch (error) {
-    return handlePlansRouteError(error)
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    return NextResponse.json({ error: message }, { status: 400 })
   }
 }
 
 export async function POST(request: Request) {
   try {
-    const user = await getRouteSessionUser()
+    const user = getRouteUser(request)
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const supabase = await createClient()
+    const supabase = createClient()
 
     const body = await request.json()
     const { topic_id, target_duration, time_slot, plan_date, goal_type, start_time, end_time } = body
@@ -112,8 +63,6 @@ export async function POST(request: Request) {
 
     let resolvedTopicId = topic_id as string
 
-    // Planner quick-add can send a subject id in topic_id.
-    // If so, resolve or create a default topic for that subject.
     const { data: subjectFallback, error: subjectLookupError } = await supabase
       .from('subject')
       .select('subject_id, user_id')
@@ -166,8 +115,6 @@ export async function POST(request: Request) {
 
     const normalizedTimeSlot = normalizeTimeSlot(time_slot)
 
-    // Prevent overlapping time ranges across ANY plan on the same date.
-    // A topic can have multiple plans — only the time range must not overlap.
     if (start_time && end_time) {
       const { data: sameDatePlans, error: fetchErr } = await supabase
         .from('daily_plan')
@@ -179,7 +126,6 @@ export async function POST(request: Request) {
       if (fetchErr) throw new Error(fetchErr.message)
 
       const hasOverlap = (sameDatePlans || []).some((existing) => {
-        // Two ranges overlap when: start1 < end2 AND start2 < end1
         return existing.start_time < end_time && start_time < existing.end_time
       })
 
@@ -203,18 +149,19 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ plan }, { status: 201 })
   } catch (error) {
-    return handlePlansRouteError(error)
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    return NextResponse.json({ error: message }, { status: 400 })
   }
 }
 
 export async function PUT(request: Request) {
   try {
-    const user = await getRouteSessionUser()
+    const user = getRouteUser(request)
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const supabase = await createClient()
+    const supabase = createClient()
     const body = await request.json()
     const { plan_id, topic_id, target_duration, time_slot, plan_date, goal_type } = body
 
@@ -313,7 +260,6 @@ export async function PUT(request: Request) {
     const normalizedTimeSlot = normalizeTimeSlot(time_slot)
     const { start_time: bodyStartTime, end_time: bodyEndTime } = body
 
-    // Prevent overlapping time ranges across ANY plan on the same date (excluding self).
     if (bodyStartTime && bodyEndTime) {
       const { data: sameDatePlans, error: fetchErr } = await supabase
         .from('daily_plan')
@@ -349,6 +295,7 @@ export async function PUT(request: Request) {
 
     return NextResponse.json({ plan }, { status: 200 })
   } catch (error) {
-    return handlePlansRouteError(error)
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    return NextResponse.json({ error: message }, { status: 400 })
   }
 }

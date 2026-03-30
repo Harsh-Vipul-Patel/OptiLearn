@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 
 export class SubjectsService {
   static async getSubjects(userId: string) {
-    const { data, error } = await (await createClient())
+    const { data, error } = await createClient()
       .from('subject')
       .select('*')
       .eq('user_id', userId)
@@ -13,7 +13,7 @@ export class SubjectsService {
   }
 
   static async createSubject(data: { user_id: string, subject_name: string, subject_category?: string, subject_color?: string }) {
-    const { data: subject, error } = await (await createClient())
+    const { data: subject, error } = await createClient()
       .from('subject')
       .insert([{
         user_id: data.user_id,
@@ -29,7 +29,7 @@ export class SubjectsService {
   }
 
   static async deleteSubject(subjectId: string, userId: string) {
-    const { data, error } = await (await createClient())
+    const { data, error } = await createClient()
       .from('subject')
       .delete()
       .eq('subject_id', subjectId)

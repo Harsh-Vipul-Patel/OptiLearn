@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { getAuthUser } from '@/lib/auth/jwt'
 import { getEmailLocalPart, getFallbackUserEmail } from '@/lib/auth/email'
 
 const VALID_EXAM_TYPES = new Set(['JEE', 'NEET', 'Boards', 'Others'])
@@ -33,21 +34,16 @@ function normalizePreferredTime(value: unknown): string | null {
   return VALID_PREFERRED_TIMES.has(raw) ? raw : null
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    
+    const user = getAuthUser(request)
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const supabase = createClient()
     const fallbackEmail = getFallbackUserEmail(user.id, user.email)
-    const fallbackName =
-      user.user_metadata?.name ||
-      user.user_metadata?.full_name ||
-      getEmailLocalPart(fallbackEmail) ||
-      'User'
+    const fallbackName = user.name || getEmailLocalPart(fallbackEmail) || 'User'
 
     const { data: profile, error } = await supabase
       .from('users')
@@ -77,7 +73,6 @@ export async function GET() {
       resolvedProfile = createdProfile
     }
 
-    // If public.users.name is blank, fall back to auth metadata (e.g. from signup form)
     if (resolvedProfile && !resolvedProfile.name) {
       resolvedProfile.name = fallbackName
     }
@@ -98,30 +93,22 @@ export async function GET() {
 
 export async function PUT(request: Request) {
   try {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    
+    const user = getAuthUser(request)
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const supabase = createClient()
     const { name, exam_type, preferred_time } = await request.json()
     const normalizedEmail = getFallbackUserEmail(user.id, user.email)
     const normalizedName =
       (typeof name === 'string' ? name.trim() : '') ||
-      user.user_metadata?.name ||
-      user.user_metadata?.full_name ||
+      user.name ||
       getEmailLocalPart(normalizedEmail) ||
       'User'
     const normalizedExamType = normalizeExamType(exam_type)
     const normalizedPreferredTime = normalizePreferredTime(preferred_time)
 
-    // Keep both metadata keys in sync so all auth providers resolve the same display name.
-    if (normalizedName) {
-      await supabase.auth.updateUser({ data: { name: normalizedName, full_name: normalizedName } })
-    }
-
-    // Upsert ensures the profile row exists even for first-time users.
     const { data: profile, error } = await supabase
       .from('users')
       .upsert(

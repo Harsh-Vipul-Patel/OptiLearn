@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
-import { createClient, getServerSession } from '@/lib/supabase/server'
+import { createClient } from '@/lib/supabase/server'
+import { getAuthUser } from '@/lib/auth/jwt'
 import { getEmailLocalPart, getFallbackUserEmail } from '@/lib/auth/email'
 
 import { LogsService } from '@/services/logs.service'
@@ -8,14 +9,14 @@ import { triggerEngineAnalysis } from '@/lib/engineClient'
 const isLevelInRange = (value: unknown): value is number =>
   Number.isInteger(value) && Number(value) >= 1 && Number(value) <= 5
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const session = await getServerSession()
-    if (!session?.user) {
+    const user = getAuthUser(request)
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const logs = await LogsService.getLogs(session.user.id)
+    const logs = await LogsService.getLogs(user.id)
 
     return NextResponse.json({ logs }, { status: 200 })
   } catch (error) {
@@ -28,21 +29,21 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const session = await getServerSession()
-    if (!session?.user) {
+    const user = getAuthUser(request)
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const supabase = await createClient()
+    const supabase = createClient()
 
     // Keep public.users in sync for FK/RLS dependencies.
-    const normalizedEmail = getFallbackUserEmail(session.user.id, session.user.email)
-    const normalizedName = (session.user.name || '').trim() || getEmailLocalPart(normalizedEmail) || 'User'
+    const normalizedEmail = getFallbackUserEmail(user.id, user.email)
+    const normalizedName = (user.name || '').trim() || getEmailLocalPart(normalizedEmail) || 'User'
     const { error: userError } = await supabase
       .from('users')
       .upsert(
         [{
-          user_id: session.user.id,
+          user_id: user.id,
           email: normalizedEmail,
           name: normalizedName,
         }],
@@ -78,17 +79,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'end_time must be later than start_time' }, { status: 400 })
     }
 
-    // Validate: Session should not be in the future
     if (sessionStartTime > now) {
       return NextResponse.json({ error: 'Cannot log a session that starts in the future' }, { status: 400 })
     }
 
-    // Validate: Session end time should not be in the future
     if (sessionEndTime > now) {
       return NextResponse.json({ error: 'Session end time cannot be in the future' }, { status: 400 })
     }
 
-    // Validate: Check if another session is already logged for the same time slot
     const { data: plan, error: planError } = await supabase
       .from('daily_plan')
       .select('plan_id, plan_date, time_slot')
@@ -99,7 +97,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Plan not found' }, { status: 404 })
     }
 
-    const userLogs = await LogsService.getLogs(session.user.id)
+    const userLogs = await LogsService.getLogs(user.id)
     const hasOverlap = userLogs.some((entry) => {
       const existingStart = new Date(String((entry as { start_time?: string }).start_time || ''))
       const existingEnd = new Date(String((entry as { end_time?: string }).end_time || ''))
@@ -133,7 +131,7 @@ export async function POST(request: Request) {
 
       triggerEngineAnalysis({
         log_id: log.log_id,
-        user_id: session.user.id,
+        user_id: user.id,
         plan_id: log.plan_id,
         start_time: startTimeISO,
         end_time: endTimeISO,

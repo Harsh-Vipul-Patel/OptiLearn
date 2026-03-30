@@ -1,19 +1,20 @@
 import { NextResponse } from 'next/server'
-import { createClient, getServerSession } from '@/lib/supabase/server'
+import { createClient } from '@/lib/supabase/server'
+import { getAuthUser } from '@/lib/auth/jwt'
 import { getEmailLocalPart, getFallbackUserEmail } from '@/lib/auth/email'
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const session = await getServerSession()
-    if (!session?.user) {
+    const user = getAuthUser(request)
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const supabase = await createClient()
+    const supabase = createClient()
     const { data, error } = await supabase
       .from('subject')
       .select('*')
-      .eq('user_id', session.user.id)
+      .eq('user_id', user.id)
       .order('created_at', { ascending: false })
 
     if (error) {
@@ -30,8 +31,8 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const session = await getServerSession()
-    if (!session?.user) {
+    const user = getAuthUser(request)
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -42,16 +43,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'subject_name is required' }, { status: 400 })
     }
 
-    const supabase = await createClient()
+    const supabase = createClient()
 
-    // Keep public.users in sync for FK/RLS dependencies.
-    const normalizedEmail = getFallbackUserEmail(session.user.id, session.user.email)
-    const normalizedName = (session.user.name || '').trim() || getEmailLocalPart(normalizedEmail) || 'User'
+    // Keep public.users in sync for FK dependencies.
+    const normalizedEmail = getFallbackUserEmail(user.id, user.email)
+    const normalizedName = (user.name || '').trim() || getEmailLocalPart(normalizedEmail) || 'User'
     const { error: userError } = await supabase
       .from('users')
       .upsert(
         [{
-          user_id: session.user.id,
+          user_id: user.id,
           email: normalizedEmail,
           name: normalizedName,
         }],
@@ -65,7 +66,7 @@ export async function POST(request: Request) {
     const { data: subject, error } = await supabase
       .from('subject')
       .insert([{
-        user_id: session.user.id,
+        user_id: user.id,
         subject_name: subject_name.trim(),
         subject_category: subject_category?.trim() || null,
         subject_color: typeof subject_color === 'string' ? subject_color.trim() : null,
@@ -87,8 +88,8 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
-    const session = await getServerSession()
-    if (!session?.user) {
+    const user = getAuthUser(request)
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -98,12 +99,12 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: 'subject id required' }, { status: 400 })
     }
 
-    const supabase = await createClient()
+    const supabase = createClient()
     const { error } = await supabase
       .from('subject')
       .delete()
       .eq('subject_id', subjectId)
-      .eq('user_id', session.user.id)
+      .eq('user_id', user.id)
 
     if (error) {
       console.error('[subjects/DELETE]', error)
