@@ -81,8 +81,7 @@ function LoginPageInner() {
       if (!res.ok) {
         setError(data.error || 'Incorrect email or password.')
       } else {
-        router.push('/dashboard')
-        router.refresh()
+        window.location.href = '/dashboard'
       }
     } catch {
       setError('Network error. Please try again.')
@@ -128,8 +127,7 @@ function LoginPageInner() {
       if (!res.ok) {
         setError(data.error || 'Registration failed.')
       } else {
-        router.push('/dashboard')
-        router.refresh()
+        window.location.href = '/dashboard'
       }
     } catch {
       setError('Network error. Please try again.')
@@ -176,8 +174,7 @@ function LoginPageInner() {
               setError(data.error || 'Google sign-in failed.')
               setLoading(false)
             } else {
-              router.push('/dashboard')
-              router.refresh()
+              window.location.href = '/dashboard'
             }
           } catch {
             setError('Network error during Google sign-in.')
