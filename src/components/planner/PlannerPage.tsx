@@ -178,8 +178,6 @@ function getBlockSlot(block: PlanBlock, ranges: SlotRanges): string {
   return block.time
 }
 
-const today = new Date().toISOString().slice(0, 10)
-
 function formatSessionRange(slot: string, durationMin: number, ranges: SlotRanges) {
   const typedSlot = (TIME_SLOTS.find(s => s === slot) ?? 'Morning') as SlotName
   const startMin = ranges[typedSlot].start
@@ -206,6 +204,14 @@ function checkTimeOverlap(
 ): boolean {
   return startTime1 < endTime2 && startTime2 < endTime1
 }
+function getTodayDateKey(): string {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+const today = getTodayDateKey()
 
 function getBlockTimeRange(block: PlanBlock, ranges: SlotRanges): { start: number; end: number } | null {
   if (block.startTime && block.endTime) {
@@ -304,6 +310,7 @@ export function PlannerPage() {
   const [subjects, setSubjects] = useState<Subject[]>([])
   const [subjectsLoading, setSubjectsLoading] = useState(true)
   const [planBlocks, setPlanBlocks] = useState<PlanBlock[]>([])
+  const [selectedPlanDate, setSelectedPlanDate] = useState(today)
   const [saving, setSaving] = useState(false)
   const [selColor, setSelColor] = useState<SubjectColor>(PALETTE[0])
   const [newName, setNewName] = useState('')
@@ -335,13 +342,13 @@ export function PlannerPage() {
   /* ── Load subjects from DB on mount ── */
   useEffect(() => {
     if (!session?.user?.id) return
-    let loadedSubjects: Subject[] = []
+    setSubjectsLoading(true)
     fetch('/api/subjects')
       .then(r => r.json())
       .then(data => {
         if (data.subjects) {
           const storedColors = getStoredSubjectColors()
-          loadedSubjects = data.subjects.map((s: Record<string, unknown>, i: number) => ({
+          const loadedSubjects = data.subjects.map((s: Record<string, unknown>, i: number) => ({
             id: 's' + s.subject_id,
             dbId: String(s.subject_id),
             name: String(s.subject_name),
@@ -365,16 +372,22 @@ export function PlannerPage() {
           setSubjects(loadedSubjects)
         }
       })
-      .then(() => {
-        return fetch(`/api/plans?date=${today}`)
-      })
+      .catch(console.error)
+      .finally(() => setSubjectsLoading(false))
+  }, [session?.user?.id])
+
+  /* ── Load plans for selected date ── */
+  useEffect(() => {
+    if (!session?.user?.id) return
+
+    fetch(`/api/plans?date=${selectedPlanDate}`)
       .then(r => r.json())
       .then(data => {
         if (data.plans) {
           const blocks = (data.plans as Record<string, unknown>[]).map((p) => {
             const studyTopic = p.studyTopic as Record<string, unknown> | undefined
             const subject = studyTopic?.subject as Record<string, unknown> | undefined
-            const subj = loadedSubjects.find(s => s.dbId === String(subject?.subject_id || ''))
+            const subjectId = String(subject?.subject_id || '')
             const startTime = p.start_time ? String(p.start_time).slice(0, 5) : undefined
             const endTime = p.end_time ? String(p.end_time).slice(0, 5) : undefined
             const rawSlot = String(p.time_slot || 'Morning')
@@ -382,7 +395,7 @@ export function PlannerPage() {
             return {
               id: 'b' + String(p.plan_id),
               planId: String(p.plan_id),
-              sid: subj?.id || '',
+              sid: subjectId ? `s${subjectId}` : '',
               topic: String(studyTopic?.topic_name || ''),
               time: normalizedSlot,
               startTime,
@@ -392,15 +405,14 @@ export function PlannerPage() {
               goal: 'Learn',
               persisted: true,
               logged: Array.isArray(p.logs) && p.logs.length > 0,
-              planDate: String(p.plan_date || today),
+              planDate: String(p.plan_date || selectedPlanDate),
             }
           })
           setPlanBlocks(blocks)
         }
       })
       .catch(console.error)
-      .finally(() => setSubjectsLoading(false))
-  }, [session?.user?.id])
+  }, [session?.user?.id, selectedPlanDate])
 
   /* ── Add subject → DB + local state ── */
   const addSubject = useCallback(async () => {
@@ -642,6 +654,7 @@ export function PlannerPage() {
                 time: updatedSlot,
                 startTime: qaUseCustomTime ? qaStartTime : undefined,
                 endTime: qaUseCustomTime ? qaEndTime : undefined,
+                planDate: editingBlock.planDate || selectedPlanDate,
                 dur: qaUseCustomTime ? (newEndMin - newStartMin) : qaDur, 
                 diff: qaDiff, 
                 goal: qaGoal 
@@ -674,7 +687,7 @@ export function PlannerPage() {
           topic_id: subj.dbId,
           target_duration: qaUseCustomTime ? (newEndMin - newStartMin) : qaDur,
           time_slot: qaTime,
-          plan_date: editingBlock.planDate || today,
+          plan_date: editingBlock.planDate || selectedPlanDate,
           start_time: qaUseCustomTime ? qaStartTime : undefined,
           end_time: qaUseCustomTime ? qaEndTime : undefined,
         }),
@@ -743,6 +756,7 @@ export function PlannerPage() {
         time: segment.slot,
         startTime: minutesToClock(segment.start),
         endTime: minutesToClock(segment.end),
+        planDate: selectedPlanDate,
         dur: segment.duration,
         diff: qaDiff,
         goal: qaGoal,
@@ -814,7 +828,7 @@ export function PlannerPage() {
     }
 
     if (remaining > 0) {
-      showToast('Not enough remaining time across today\'s slots', 'warning')
+      showToast(`Not enough remaining time for ${selectedPlanDate}`, 'warning')
       return
     }
 
@@ -826,6 +840,7 @@ export function PlannerPage() {
       time: segment.slot,
       startTime: minutesToClock(segment.startAbs),
       endTime: minutesToClock(segment.endAbs),
+      planDate: selectedPlanDate,
       dur: segment.duration,
       diff: qaDiff,
       goal: qaGoal,
@@ -850,7 +865,7 @@ export function PlannerPage() {
     }
     setTimeout(() => animateSubjectToSlot(sid, newBlocks[0].time), 80)
     resetFormFields()
-  }, [editingBlockId, qaSubject, qaTopic, qaTime, qaUseCustomTime, qaStartTime, qaEndTime, qaDur, qaDiff, qaGoal, subjects, hasTimeConflict, showToast, animateSubjectToSlot, slotRanges, planBlocks, resetFormFields])
+  }, [editingBlockId, qaSubject, qaTopic, qaTime, qaUseCustomTime, qaStartTime, qaEndTime, qaDur, qaDiff, qaGoal, subjects, hasTimeConflict, showToast, animateSubjectToSlot, slotRanges, planBlocks, resetFormFields, selectedPlanDate])
 
   const confirmSplitSession = useCallback(() => {
     if (!pendingSplitConfirmation) return
@@ -921,7 +936,7 @@ export function PlannerPage() {
               topic_id: subj.dbId,      // API resolves subject-id fallback to a real topic id
               target_duration: block.dur,
               time_slot: block.time,
-              plan_date: today,
+              plan_date: block.planDate || selectedPlanDate,
               start_time: block.startTime || undefined,
               end_time: block.endTime || undefined,
             }),
@@ -965,7 +980,7 @@ export function PlannerPage() {
     } finally {
       setSaving(false)
     }
-  }, [planBlocks, subjects, showToast])
+  }, [planBlocks, selectedPlanDate, subjects, showToast])
 
   const totalHours = (planBlocks.reduce((a, b) => a + b.dur, 0) / 60).toFixed(1)
   const visibleSlots = TIME_SLOTS.filter(slot => planBlocks.some(b => getBlockSlot(b, slotRanges) === slot))
@@ -981,6 +996,10 @@ export function PlannerPage() {
     { value: 'Revise', label: 'Revise' },
     { value: 'Practice', label: 'Practice' },
   ]
+  const selectedDateObj = new Date(`${selectedPlanDate}T00:00:00`)
+  const selectedDateLabel = Number.isNaN(selectedDateObj.getTime())
+    ? selectedPlanDate
+    : selectedDateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
 
   return (
     <div>
@@ -990,6 +1009,31 @@ export function PlannerPage() {
           <div className="page-sub">Use quick-add to build your timeline. Set custom slot timings for Morning, Afternoon, Evening, and Night based on your personal routine.</div>
         </div>
         <div className="header-actions">
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            <label htmlFor="planner-date" style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-soft)' }}>Plan Date</label>
+            <input
+              id="planner-date"
+              className="form-input"
+              type="date"
+              value={selectedPlanDate}
+              onChange={(e) => {
+                const nextDate = e.target.value
+                if (!nextDate || nextDate === selectedPlanDate) return
+
+                const hasUnsaved = planBlocks.some((block) => !block.persisted)
+                if (hasUnsaved && typeof window !== 'undefined') {
+                  const proceed = window.confirm('You have unsaved blocks. Switch date and discard unsaved changes?')
+                  if (!proceed) return
+                }
+
+                setPendingSplitConfirmation(null)
+                setEditingBlockId(null)
+                resetFormFields()
+                setSelectedPlanDate(nextDate)
+              }}
+              style={{ minWidth: 155, height: 34, padding: '6px 10px' }}
+            />
+          </div>
           <button className="btn-secondary btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={() => { setPlanBlocks([]); showToast('Plan cleared', 'trash') }}><TrashIcon width={15} height={15} />Clear</button>
           <button className="btn-primary btn-sm" onClick={savePlan} disabled={saving}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
@@ -1040,7 +1084,7 @@ export function PlannerPage() {
         {/* Timeline */}
         <div className="timeline-area">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-            <div className="section-title" style={{ margin: 0 }}>Today&apos;s Timeline</div>
+            <div className="section-title" style={{ margin: 0 }}>Timeline · {selectedDateLabel}</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <button className="btn-secondary btn-sm" onClick={openSlotEditor}>Adjust Slot Timings</button>
               <span className="badge badge-indigo">{planBlocks.length} blocks · {totalHours}h planned</span>

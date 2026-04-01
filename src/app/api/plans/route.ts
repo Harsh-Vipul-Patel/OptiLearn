@@ -150,16 +150,10 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'end_time must be later than start_time' }, { status: 400 })
       }
 
-      const { data: sameDatePlans, error: fetchErr } = await supabase
-        .from('daily_plan')
-        .select('plan_id, start_time, end_time')
-        .eq('plan_date', plan_date)
-        .not('start_time', 'is', null)
-        .not('end_time', 'is', null)
+      const sameDatePlans = await PlansService.getPlans(user.id, plan_date, true)
 
-      if (fetchErr) throw new Error(fetchErr.message)
-
-      const hasOverlap = (sameDatePlans || []).some((existing) => {
+      const hasOverlap = sameDatePlans.some((existing) => {
+        if (!existing.start_time || !existing.end_time) return false
         const existingStart = parseClockToMinutes(existing.start_time)
         const existingEnd = parseClockToMinutes(existing.end_time)
         if (existingStart === null || existingEnd === null) return false
@@ -310,17 +304,11 @@ export async function PUT(request: Request) {
         return NextResponse.json({ error: 'end_time must be later than start_time' }, { status: 400 })
       }
 
-      const { data: sameDatePlans, error: fetchErr } = await supabase
-        .from('daily_plan')
-        .select('plan_id, start_time, end_time')
-        .eq('plan_date', plan_date)
-        .neq('plan_id', plan_id)
-        .not('start_time', 'is', null)
-        .not('end_time', 'is', null)
+      const sameDatePlans = await PlansService.getPlans(user.id, plan_date, true)
 
-      if (fetchErr) throw new Error(fetchErr.message)
-
-      const hasOverlap = (sameDatePlans || []).some((existing) => {
+      const hasOverlap = sameDatePlans.some((existing) => {
+        if (existing.plan_id === plan_id) return false
+        if (!existing.start_time || !existing.end_time) return false
         const existingStart = parseClockToMinutes(existing.start_time)
         const existingEnd = parseClockToMinutes(existing.end_time)
         if (existingStart === null || existingEnd === null) return false
