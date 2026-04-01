@@ -13,7 +13,7 @@ type StudyLog = {
   plan_id?: string
   start_time?: string
   end_time?: string | null
-  efficiency?: number
+  efficiency?: number | string | null
   focus_level?: number
   dailyPlan?: {
     studyTopic?: {
@@ -37,6 +37,17 @@ function getLogDurationHours(log: StudyLog): number {
   const end = new Date(log.end_time || '').getTime()
   if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return 0
   return (end - start) / 3600000
+}
+
+const clampPercent = (value: number) => Math.min(100, Math.max(0, Math.round(value)))
+
+const parseEfficiencyPercent = (value: unknown): number | null => {
+  if (value === null || value === undefined || value === '') return null
+
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric) || numeric < 0) return null
+
+  return numeric <= 1 ? clampPercent(numeric * 100) : clampPercent(numeric)
 }
 
 export function AnalyticsPage() {
@@ -71,8 +82,15 @@ export function AnalyticsPage() {
 
   const calculateStats = (filteredLogs: StudyLog[]) => {
     const totalMin = filteredLogs.reduce((acc, l) => acc + (getLogDurationHours(l) * 60), 0)
-    const effArr = filteredLogs.map((l) => Number(l.efficiency || 0)).filter(Boolean)
-    const avgEff = effArr.length ? Math.round(effArr.reduce((a,b)=>a+b,0)/effArr.length) : 0
+    const loggedEfficiency = filteredLogs
+      .map((l) => parseEfficiencyPercent(l.efficiency))
+      .filter((value): value is number => value !== null)
+    const focusDerivedEfficiency = filteredLogs
+      .map((l) => Number(l.focus_level))
+      .filter((value) => Number.isFinite(value) && value >= 1 && value <= 5)
+      .map((value) => clampPercent((value / 5) * 100))
+    const efficiencySource = loggedEfficiency.length > 0 ? loggedEfficiency : focusDerivedEfficiency
+    const avgEff = efficiencySource.length ? Math.round(efficiencySource.reduce((a,b)=>a+b,0)/efficiencySource.length) : 0
     const focusArr = filteredLogs.map((l) => Number(l.focus_level || 0)).filter(Boolean)
     const avgFocus = focusArr.length ? (focusArr.reduce((a:number,b:number)=>a+b,0)/focusArr.length).toFixed(1) : '0.0'
     return {

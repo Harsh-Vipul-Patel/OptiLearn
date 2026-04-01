@@ -36,17 +36,21 @@ export function BurnoutMonitor({
         <Badge variant={badgeVariant as 'sage' | 'indigo' | 'terra'}>{risk} Risk</Badge>
       </div>
       <div style={{ fontSize: '11.5px', color: 'var(--text-soft)', marginBottom: 14 }}>Based on your last 7 sessions</div>
-      {bars.map((bar) => (
+      {bars.map((bar) => {
+        const clampedValue = Math.min(100, Math.max(0, Math.round(bar.value)))
+
+        return (
         <div key={bar.label} className="burnout-bar-wrap">
           <div className="burnout-label">
             <span>{bar.label}</span>
-            <span style={{ fontWeight: 600 }}>{bar.valueLabel ?? `${bar.value}%`}</span>
+            <span style={{ fontWeight: 600 }}>{bar.valueLabel ?? `${clampedValue}%`}</span>
           </div>
           <div className="burnout-bar">
-            <div className="burnout-fill" style={{ width: `${bar.value}%`, background: bar.color }} />
+            <div className="burnout-fill" style={{ width: `${clampedValue}%`, background: bar.color }} />
           </div>
         </div>
-      ))}
+        )
+      })}
       <div style={{ marginTop: 16, padding: '11px 13px', background: panelBg, borderRadius: 'var(--r-sm)' }}>
         <div style={{ fontSize: 12, fontWeight: 600, color: panelTitleColor, marginBottom: 2 }}>{panelTitle}</div>
         <div style={{ fontSize: 12, color: 'var(--text-mid)' }}>{message}</div>

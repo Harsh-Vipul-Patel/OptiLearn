@@ -20,6 +20,29 @@ function normalizeTimeSlot(value?: string | null) {
   return 'Night'
 }
 
+function parseClockToMinutes(value: unknown): number | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  if (!trimmed) return null
+
+  const timeSource = trimmed.includes('T') ? trimmed.split('T')[1] : trimmed
+  const withoutZulu = timeSource.replace('Z', '')
+  const withoutOffset = withoutZulu.split('+')[0].split('-')[0]
+  const parts = withoutOffset.split(':')
+  if (parts.length < 2) return null
+
+  const hour = Number(parts[0])
+  const minute = Number(parts[1])
+  if (!Number.isInteger(hour) || !Number.isInteger(minute)) return null
+  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null
+
+  return hour * 60 + minute
+}
+
+function hasMinuteOverlap(startA: number, endA: number, startB: number, endB: number): boolean {
+  return startA < endB && startB < endA
+}
+
 function getRouteUser(request: Request): AuthUser | null {
   return getAuthUser(request)
 }
@@ -116,6 +139,17 @@ export async function POST(request: Request) {
     const normalizedTimeSlot = normalizeTimeSlot(time_slot)
 
     if (start_time && end_time) {
+      const requestedStart = parseClockToMinutes(start_time)
+      const requestedEnd = parseClockToMinutes(end_time)
+
+      if (requestedStart === null || requestedEnd === null) {
+        return NextResponse.json({ error: 'Invalid start_time or end_time format' }, { status: 400 })
+      }
+
+      if (requestedStart >= requestedEnd) {
+        return NextResponse.json({ error: 'end_time must be later than start_time' }, { status: 400 })
+      }
+
       const { data: sameDatePlans, error: fetchErr } = await supabase
         .from('daily_plan')
         .select('plan_id, start_time, end_time')
@@ -126,7 +160,11 @@ export async function POST(request: Request) {
       if (fetchErr) throw new Error(fetchErr.message)
 
       const hasOverlap = (sameDatePlans || []).some((existing) => {
-        return existing.start_time < end_time && start_time < existing.end_time
+        const existingStart = parseClockToMinutes(existing.start_time)
+        const existingEnd = parseClockToMinutes(existing.end_time)
+        if (existingStart === null || existingEnd === null) return false
+
+        return hasMinuteOverlap(requestedStart, requestedEnd, existingStart, existingEnd)
       })
 
       if (hasOverlap) {
@@ -261,6 +299,17 @@ export async function PUT(request: Request) {
     const { start_time: bodyStartTime, end_time: bodyEndTime } = body
 
     if (bodyStartTime && bodyEndTime) {
+      const requestedStart = parseClockToMinutes(bodyStartTime)
+      const requestedEnd = parseClockToMinutes(bodyEndTime)
+
+      if (requestedStart === null || requestedEnd === null) {
+        return NextResponse.json({ error: 'Invalid start_time or end_time format' }, { status: 400 })
+      }
+
+      if (requestedStart >= requestedEnd) {
+        return NextResponse.json({ error: 'end_time must be later than start_time' }, { status: 400 })
+      }
+
       const { data: sameDatePlans, error: fetchErr } = await supabase
         .from('daily_plan')
         .select('plan_id, start_time, end_time')
@@ -272,7 +321,11 @@ export async function PUT(request: Request) {
       if (fetchErr) throw new Error(fetchErr.message)
 
       const hasOverlap = (sameDatePlans || []).some((existing) => {
-        return existing.start_time < bodyEndTime && bodyStartTime < existing.end_time
+        const existingStart = parseClockToMinutes(existing.start_time)
+        const existingEnd = parseClockToMinutes(existing.end_time)
+        if (existingStart === null || existingEnd === null) return false
+
+        return hasMinuteOverlap(requestedStart, requestedEnd, existingStart, existingEnd)
       })
 
       if (hasOverlap) {

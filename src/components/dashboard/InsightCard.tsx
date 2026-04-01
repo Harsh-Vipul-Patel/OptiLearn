@@ -14,6 +14,7 @@ interface InsightCardProps {
 export function InsightCard({ text, burnoutRisk = 'Low', fatigue = 32 }: InsightCardProps) {
   const { showToast } = useToast()
   const [isGenerating, setIsGenerating] = useState(false)
+  const fatigueScore = Math.min(100, Math.max(0, Math.round(fatigue)))
 
   const onGenerateInsights = async () => {
     try {
@@ -58,7 +59,7 @@ export function InsightCard({ text, burnoutRisk = 'Low', fatigue = 32 }: Insight
       <div style={{ marginTop: 18, padding: '11px 13px', background: 'rgba(255,255,255,.1)', borderRadius: 'var(--r-sm)', fontSize: 12, opacity: .85, position: 'relative', zIndex: 1 }}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
           <CheckCircleIcon width={18} height={18} />
-          Burnout risk: <strong>{burnoutRisk}</strong> · Fatigue {fatigue}/100 · Streak intact!
+          Burnout risk: <strong>{burnoutRisk}</strong> · Fatigue {fatigueScore}/100 · Streak intact!
         </span>
       </div>
     </div>

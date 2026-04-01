@@ -15,7 +15,7 @@ type StudyLog = {
   plan_id?: string
   start_time?: string
   end_time?: string | null
-  efficiency?: number
+  efficiency?: number | string | null
   focus_level?: number
   fatigue_level?: number
 }
@@ -24,6 +24,17 @@ type Suggestion = {
   created_at?: string
   content?: string
   text?: string
+}
+
+const clampPercent = (value: number) => Math.min(100, Math.max(0, Math.round(value)))
+
+const parseEfficiencyPercent = (value: unknown): number | null => {
+  if (value === null || value === undefined || value === '') return null
+
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric) || numeric < 0) return null
+
+  return numeric <= 1 ? clampPercent(numeric * 100) : clampPercent(numeric)
 }
 
 export default function DashboardPage() {
@@ -99,8 +110,19 @@ export default function DashboardPage() {
     pct: totalMinToday > 0 ? Math.round((data.durationMin / totalMinToday) * 100) : 0
   }))
 
-  const effArr = todayLogs.map((l) => Number(l.efficiency || 0)).filter(Boolean)
-  const avgEff = effArr.length > 0 ? Math.round(effArr.reduce((a:number,b:number)=>a+b,0)/effArr.length) + '%' : 'N/A'
+  const loggedEfficiency = todayLogs
+    .map((l) => parseEfficiencyPercent(l.efficiency))
+    .filter((value): value is number => value !== null)
+
+  const focusDerivedEfficiency = todayLogs
+    .map((l) => Number(l.focus_level))
+    .filter((value) => Number.isFinite(value) && value >= 1 && value <= 5)
+    .map((value) => clampPercent((value / 5) * 100))
+
+  const efficiencySource = loggedEfficiency.length > 0 ? loggedEfficiency : focusDerivedEfficiency
+  const avgEff = efficiencySource.length > 0
+    ? `${Math.round(efficiencySource.reduce((a:number,b:number)=>a+b,0) / efficiencySource.length)}%`
+    : 'N/A'
 
   /* ── 3.5 Burnout metrics from last 7 sessions (db-backed logs) ── */
   const recentLogs = [...typedLogs]
@@ -109,11 +131,11 @@ export default function DashboardPage() {
     .slice(0, 7)
 
   const avgFatiguePct = recentLogs.length > 0
-    ? Math.round((recentLogs.reduce((sum, l) => sum + Number(l.fatigue_level || 0), 0) / (recentLogs.length * 5)) * 100)
+    ? clampPercent((recentLogs.reduce((sum, l) => sum + Number(l.fatigue_level || 0), 0) / (recentLogs.length * 5)) * 100)
     : 0
 
   const avgFocusPct = recentLogs.length > 0
-    ? Math.round((recentLogs.reduce((sum, l) => sum + Number(l.focus_level || 0), 0) / (recentLogs.length * 5)) * 100)
+    ? clampPercent((recentLogs.reduce((sum, l) => sum + Number(l.focus_level || 0), 0) / (recentLogs.length * 5)) * 100)
     : 0
 
   const todayStart = new Date()
@@ -129,10 +151,12 @@ export default function DashboardPage() {
       .map((dt) => dt.toISOString().slice(0, 10))
   )
 
-  const consistencyPct = Math.min(100, Math.round((uniqueRecentDays.size / 7) * 100))
+  const consistencyPct = clampPercent((uniqueRecentDays.size / 7) * 100)
 
-  const burnoutScore = Math.round(avgFatiguePct * 0.5 + (100 - consistencyPct) * 0.25 + (100 - avgFocusPct) * 0.25)
+  const burnoutScore = clampPercent(avgFatiguePct * 0.5 + (100 - consistencyPct) * 0.25 + (100 - avgFocusPct) * 0.25)
   const burnoutRisk: 'Low' | 'Medium' | 'High' = burnoutScore >= 67 ? 'High' : burnoutScore >= 40 ? 'Medium' : 'Low'
+
+  const insightFatigue = clampPercent(totalMinToday / 4)
 
   const burnoutMessage =
     burnoutRisk === 'High'
@@ -193,7 +217,7 @@ export default function DashboardPage() {
       <StatsRow hoursToday={hoursToday} efficiency={avgEff} streak={streak} insightsToday={typedSuggestions.filter((s) => String(s.created_at).startsWith(todayDate)).length} />
 
       <div className="dashboard-top-grid">
-        <InsightCard text={insightText} burnoutRisk="Low" fatigue={Math.round(totalMinToday / 4)} />
+        <InsightCard text={insightText} burnoutRisk="Low" fatigue={insightFatigue} />
         <GoalRingCard hoursStudied={Number(hoursTodayNum.toFixed(1))} goalHours={8} subjects={RING_SUBJECTS} />
       </div>
 

@@ -80,6 +80,18 @@ const DEFAULT_SLOT_RANGES: SlotRanges = {
   Night: { start: 20 * 60, end: 4 * 60 },
 }
 
+const DURATION_MIN = 15
+const DURATION_MAX = 180
+const DURATION_MARKS: Array<{ value: number; label: string; align: 'left' | 'center' | 'right' }> = [
+  { value: 15, label: '15m', align: 'left' },
+  { value: 60, label: '1h', align: 'center' },
+  { value: 180, label: '3h', align: 'right' },
+]
+
+function getDurationMarkPercent(value: number): number {
+  return ((value - DURATION_MIN) / (DURATION_MAX - DURATION_MIN)) * 100
+}
+
 function cloneDefaultSlotRanges(): SlotRanges {
   return {
     Morning: { ...DEFAULT_SLOT_RANGES.Morning },
@@ -1211,11 +1223,20 @@ export function PlannerPage() {
                   <div className="form-group">
                     <label className="form-label">Duration: <span style={{ color: 'var(--terra)', fontWeight: 700 }}>{qaDur} min</span></label>
                     <div style={{ position: 'relative', paddingBottom: '24px' }}>
-                      <input className="form-range" type="range" min="15" max="180" step="15" value={qaDur} onChange={e => setQaDur(Number(e.target.value))} />
-                      <div className="range-labels" style={{ position: 'absolute', bottom: '0', left: '0', right: '0', display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-soft)', fontWeight: '500', userSelect: 'none', paddingLeft: '2px', paddingRight: '2px' }}>
-                        <span>15m</span>
-                        <span>1h</span>
-                        <span>3h</span>
+                      <input className="form-range" type="range" min={DURATION_MIN} max={DURATION_MAX} step="15" value={qaDur} onChange={e => setQaDur(Number(e.target.value))} />
+                      <div className="range-labels" style={{ position: 'absolute', bottom: '0', left: '0', right: '0', height: '14px', fontSize: '11px', color: 'var(--text-soft)', fontWeight: '500', userSelect: 'none', pointerEvents: 'none', paddingLeft: '2px', paddingRight: '2px' }}>
+                        {DURATION_MARKS.map((mark) => (
+                          <span
+                            key={mark.label}
+                            style={{
+                              position: 'absolute',
+                              left: `${getDurationMarkPercent(mark.value)}%`,
+                              transform: mark.align === 'left' ? 'translateX(0)' : mark.align === 'right' ? 'translateX(-100%)' : 'translateX(-50%)',
+                            }}
+                          >
+                            {mark.label}
+                          </span>
+                        ))}
                       </div>
                     </div>
                   </div>
