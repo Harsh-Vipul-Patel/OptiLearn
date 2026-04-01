@@ -324,7 +324,6 @@ export function PlannerPage() {
   const [qaDiff, setQaDiff] = useState('Medium')
   const [qaGoal, setQaGoal] = useState('Learn')
   const [editingBlockId, setEditingBlockId] = useState<string | null>(null)
-  const [slotPulse, setSlotPulse] = useState<string | null>(null)
   const [slotRanges, setSlotRanges] = useState<SlotRanges>(() => cloneDefaultSlotRanges())
   const [showSlotEditor, setShowSlotEditor] = useState(false)
   const [slotDraft, setSlotDraft] = useState<Record<SlotName, { start: string; end: string }>>(() => ({
@@ -515,74 +514,6 @@ export function PlannerPage() {
     setShowSlotEditor(false)
     showToast('Timeline slot timings updated', 'info')
   }, [session?.user?.id, showToast, slotDraft])
-
-  const animateSubjectToSlot = useCallback((sid: string, slot: string) => {
-    if (typeof window === 'undefined') return
-
-    const subjectEl = document.querySelector(`[data-subject-id="${sid}"]`) as HTMLElement | null
-    const slotEl = document.querySelector(`[data-slot-id="${slot}"]`) as HTMLElement | null
-    if (!subjectEl || !slotEl) return
-
-    const subjectRect = subjectEl.getBoundingClientRect()
-    const slotRect = slotEl.getBoundingClientRect()
-    const clone = subjectEl.cloneNode(true) as HTMLElement
-
-    clone.style.position = 'fixed'
-    clone.style.left = `${subjectRect.left}px`
-    clone.style.top = `${subjectRect.top}px`
-    clone.style.width = `${subjectRect.width}px`
-    clone.style.height = `${subjectRect.height}px`
-    clone.style.margin = '0'
-    clone.style.zIndex = '9999'
-    clone.style.pointerEvents = 'none'
-    clone.style.transformOrigin = 'center center'
-    document.body.appendChild(clone)
-
-    const targetX = slotRect.left + Math.min(slotRect.width * 0.25, 120)
-    const targetY = slotRect.top + 40
-    const dx = targetX - subjectRect.left
-    const dy = targetY - subjectRect.top
-
-    const spinDirection = dx >= 0 ? 1 : -1
-    const jumpHeight = Math.min(140, Math.max(70, Math.abs(dx) * 0.18 + 52))
-    const apexX = dx * 0.46
-    const apexY = dy - jumpHeight
-
-    const finishAnimation = () => {
-      clone.remove()
-      setSlotPulse(slot)
-      slotEl.animate(
-        [
-          { transform: 'translateY(0px) scale(1)' },
-          { transform: 'translateY(-3px) scale(1.01)', offset: 0.36 },
-          { transform: 'translateY(0px) scale(1)', offset: 1 },
-        ],
-        { duration: 420, easing: 'cubic-bezier(.24,.82,.3,1)' }
-      )
-      setTimeout(() => setSlotPulse((prev) => (prev === slot ? null : prev)), 700)
-    }
-
-    if (typeof clone.animate === 'function') {
-      const travel = clone.animate(
-        [
-          { transform: 'translate(0px, 0px) rotate(0deg) scale(1)', opacity: 1, offset: 0 },
-          { transform: `translate(${apexX}px, ${apexY}px) rotate(${spinDirection * 170}deg) scale(0.96)`, opacity: 0.95, offset: 0.46 },
-          { transform: `translate(${dx}px, ${dy}px) rotate(${spinDirection * 360}deg) scale(0.86)`, opacity: 0.12, offset: 1 },
-        ],
-        { duration: 760, easing: 'cubic-bezier(.2,.78,.24,1)', fill: 'forwards' }
-      )
-      travel.onfinish = finishAnimation
-      return
-    }
-
-    clone.style.transition = 'transform 760ms cubic-bezier(.2,.78,.24,1), opacity 760ms ease'
-    requestAnimationFrame(() => {
-      clone.style.transform = `translate(${dx}px, ${dy}px) rotate(${spinDirection * 360}deg) scale(0.86)`
-      clone.style.opacity = '0.12'
-    })
-
-    setTimeout(finishAnimation, 780)
-  }, [])
 
   const resetFormFields = useCallback(() => {
     setQaTopic('')
@@ -779,7 +710,6 @@ export function PlannerPage() {
       } else {
         showToast(`${s ? s.name : 'Block'} added!`)
       }
-      setTimeout(() => animateSubjectToSlot(sid, newBlocks[0].time), 80)
       resetFormFields()
       return
     }
@@ -863,9 +793,8 @@ export function PlannerPage() {
     } else {
       showToast(`${s ? s.name : 'Block'} added!`)
     }
-    setTimeout(() => animateSubjectToSlot(sid, newBlocks[0].time), 80)
     resetFormFields()
-  }, [editingBlockId, qaSubject, qaTopic, qaTime, qaUseCustomTime, qaStartTime, qaEndTime, qaDur, qaDiff, qaGoal, subjects, hasTimeConflict, showToast, animateSubjectToSlot, slotRanges, planBlocks, resetFormFields, selectedPlanDate])
+  }, [editingBlockId, qaSubject, qaTopic, qaTime, qaUseCustomTime, qaStartTime, qaEndTime, qaDur, qaDiff, qaGoal, subjects, hasTimeConflict, showToast, slotRanges, planBlocks, resetFormFields, selectedPlanDate])
 
   const confirmSplitSession = useCallback(() => {
     if (!pendingSplitConfirmation) return
@@ -874,10 +803,9 @@ export function PlannerPage() {
     setPlanBlocks(prev => [...prev, ...blocks])
     const subject = subjects.find(x => x.id === sid)
     showToast(`${subject ? subject.name : 'Block'} split into ${blocks.length} sessions`, 'info')
-    setTimeout(() => animateSubjectToSlot(sid, blocks[0].time), 80)
     setPendingSplitConfirmation(null)
     resetFormFields()
-  }, [pendingSplitConfirmation, subjects, showToast, animateSubjectToSlot, resetFormFields])
+  }, [pendingSplitConfirmation, subjects, showToast, resetFormFields])
 
   const cancelSplitSession = useCallback(() => {
     setPendingSplitConfirmation(null)
@@ -1155,7 +1083,6 @@ export function PlannerPage() {
                   key={slot}
                   className="timeline-slot"
                   data-slot-id={slot}
-                  style={slotPulse === slot ? { boxShadow: '0 0 0 2px rgba(201,107,58,.35), 0 10px 24px rgba(0,0,0,.08)' } : undefined}
                 >
                   <div className="ts-time">{getSlotLabel(slot, slotRanges)}</div>
                   <div className="ts-body" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

@@ -18,11 +18,11 @@ export default function LandingPage() {
     <div className="landing-root">
       {/* Nav */}
       <nav className="landing-nav">
-        <div className="landing-logo">OptiLearn</div>
+        <Link href="/" className="landing-logo" style={{ textDecoration: 'none' }}>OptiLearn</Link>
         <div className="landing-nav-links">
-          <a href="#features" style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-mid)', textDecoration: 'none' }}>Features</a>
-          <a href="#howitworks" style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-mid)', textDecoration: 'none' }}>How it Works</a>
-          <a href="#about" style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-mid)', textDecoration: 'none' }}>About</a>
+          <Link href="/features" style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-mid)', textDecoration: 'none', transition: 'color .2s' }}>Features</Link>
+          <Link href="/how-it-works" style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-mid)', textDecoration: 'none', transition: 'color .2s' }}>How it Works</Link>
+          <Link href="/about" style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-mid)', textDecoration: 'none', transition: 'color .2s' }}>About</Link>
         </div>
         <div className="landing-nav-cta">
           <Link href="/login" className="btn-secondary btn-sm">Log in</Link>
