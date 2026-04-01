@@ -49,7 +49,7 @@ export function CustomSelect({
 
   const [open, setOpen] = useState(false)
   const [highlightedIndex, setHighlightedIndex] = useState(-1)
-  const [menuStyle, setMenuStyle] = useState<CSSProperties>({})
+  const [menuStyle, setMenuStyle] = useState<CSSProperties>({ position: 'fixed', opacity: 0, pointerEvents: 'none' })
 
   const selected = useMemo(
     () => options.find((option) => option.value === value),
@@ -95,7 +95,21 @@ export function CustomSelect({
 
   useEffect(() => {
     if (!open || activeHighlightedIndex < 0) return
-    optionRefs.current[activeHighlightedIndex]?.scrollIntoView({ block: 'nearest' })
+    const option = optionRefs.current[activeHighlightedIndex]
+    const menu = menuRef.current
+    if (option && menu) {
+      const optionTop = option.offsetTop
+      const optionBottom = optionTop + option.offsetHeight
+      const menuTop = menu.scrollTop
+      const menuHeight = menu.clientHeight
+      const menuBottom = menuTop + menuHeight
+
+      if (optionTop < menuTop) {
+        menu.scrollTop = optionTop
+      } else if (optionBottom > menuBottom) {
+        menu.scrollTop = optionBottom - menuHeight
+      }
+    }
   }, [open, activeHighlightedIndex])
 
   useEffect(() => {
