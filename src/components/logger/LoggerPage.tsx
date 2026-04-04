@@ -7,7 +7,9 @@ import { usePlans } from '@/hooks/usePlans'
 import { useToast } from '@/components/ui/Toast'
 import { Badge } from '@/components/ui/Badge'
 import { CustomSelect } from '@/components/ui/CustomSelect'
+import { DatePicker } from '@/components/ui/DatePicker'
 import { BookIcon, FocusIcon, LaptopIcon, PhoneIcon, SparklesIcon, VolumeIcon } from '@/components/ui/AppIcons'
+import { TimePicker } from '@/components/ui/TimePicker'
 import { formatPlanScheduleLabel } from '@/lib/planTimeLabel'
 
 const DISTRACTIONS = [
@@ -233,15 +235,15 @@ export function LoggerPage() {
             <div className="logger-time-grid" style={{ display: 'grid', gap: 13 }}>
               <div className="form-group">
                 <label className="form-label">Date</label>
-                <input className="form-input" type="date" value={logDate} onChange={e => setLogDate(e.target.value)} />
+                <DatePicker value={logDate} onChange={setLogDate} ariaLabel="Select log date" />
               </div>
               <div className="form-group">
                 <label className="form-label">Start Time</label>
-                <input className="form-input" type="time" value={startTime} onChange={e => setStartTime(e.target.value)} />
+                <TimePicker value={startTime} onChange={setStartTime} ariaLabel="Select session start time" minuteStep={1} />
               </div>
               <div className="form-group">
                 <label className="form-label">End Time</label>
-                <input className="form-input" type="time" value={endTime} onChange={e => setEndTime(e.target.value)} />
+                <TimePicker value={endTime} onChange={setEndTime} ariaLabel="Select session end time" minuteStep={1} />
               </div>
             </div>
 

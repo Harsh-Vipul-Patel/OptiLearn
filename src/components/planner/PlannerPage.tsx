@@ -5,7 +5,9 @@ import { useToast } from '@/components/ui/Toast'
 import { useSuggestionsSync } from '@/hooks/useStudyLogSync'
 import { useSession } from '@/components/Providers'
 import Link from 'next/link'
+import { DatePicker } from '@/components/ui/DatePicker'
 import { CustomSelect } from '@/components/ui/CustomSelect'
+import { TimePicker } from '@/components/ui/TimePicker'
 import { BookIcon, SparklesIcon, TargetIcon, TrashIcon } from '@/components/ui/AppIcons'
 import { formatPlanScheduleLabel } from '@/lib/planTimeLabel'
 
@@ -938,14 +940,10 @@ export function PlannerPage() {
         </div>
         <div className="header-actions">
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-            <label htmlFor="planner-date" style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-soft)' }}>Plan Date</label>
-            <input
-              id="planner-date"
-              className="form-input"
-              type="date"
+            <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-soft)' }}>Plan Date</label>
+            <DatePicker
               value={selectedPlanDate}
-              onChange={(e) => {
-                const nextDate = e.target.value
+              onChange={(nextDate) => {
                 if (!nextDate || nextDate === selectedPlanDate) return
 
                 const hasUnsaved = planBlocks.some((block) => !block.persisted)
@@ -959,7 +957,8 @@ export function PlannerPage() {
                 resetFormFields()
                 setSelectedPlanDate(nextDate)
               }}
-              style={{ minWidth: 155, height: 34, padding: '6px 10px' }}
+              ariaLabel="Select planner date"
+              allowClear={false}
             />
           </div>
           <button className="btn-secondary btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={() => { setPlanBlocks([]); showToast('Plan cleared', 'trash') }}><TrashIcon width={15} height={15} />Clear</button>
@@ -1026,17 +1025,17 @@ export function PlannerPage() {
                   <div key={slot} className="form-group" style={{ margin: 0 }}>
                     <label className="form-label">{slot}</label>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-                      <input
-                        className="form-input"
-                        type="time"
+                      <TimePicker
                         value={slotDraft[slot].start}
-                        onChange={(e) => setSlotDraft((prev) => ({ ...prev, [slot]: { ...prev[slot], start: e.target.value } }))}
+                        onChange={(value) => setSlotDraft((prev) => ({ ...prev, [slot]: { ...prev[slot], start: value } }))}
+                        ariaLabel={`Select ${slot} start time`}
+                        minuteStep={1}
                       />
-                      <input
-                        className="form-input"
-                        type="time"
+                      <TimePicker
                         value={slotDraft[slot].end}
-                        onChange={(e) => setSlotDraft((prev) => ({ ...prev, [slot]: { ...prev[slot], end: e.target.value } }))}
+                        onChange={(value) => setSlotDraft((prev) => ({ ...prev, [slot]: { ...prev[slot], end: value } }))}
+                        ariaLabel={`Select ${slot} end time`}
+                        minuteStep={1}
                       />
                     </div>
                   </div>
@@ -1163,21 +1162,11 @@ export function PlannerPage() {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                   <div className="form-group">
                     <label className="form-label">Start Time</label>
-                    <input 
-                      className="form-input" 
-                      type="time" 
-                      value={qaStartTime} 
-                      onChange={e => setQaStartTime(e.target.value)} 
-                    />
+                    <TimePicker value={qaStartTime} onChange={setQaStartTime} ariaLabel="Select custom start time" minuteStep={1} />
                   </div>
                   <div className="form-group">
                     <label className="form-label">End Time</label>
-                    <input 
-                      className="form-input" 
-                      type="time" 
-                      value={qaEndTime} 
-                      onChange={e => setQaEndTime(e.target.value)} 
-                    />
+                    <TimePicker value={qaEndTime} onChange={setQaEndTime} ariaLabel="Select custom end time" minuteStep={1} />
                   </div>
                 </div>
               ) : (
