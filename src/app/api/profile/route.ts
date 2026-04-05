@@ -79,6 +79,9 @@ export async function GET(request: Request) {
 
     if (resolvedProfile) {
       resolvedProfile.preferred_time = resolvedProfile.preferred_study_time || ''
+      resolvedProfile.has_password = !!resolvedProfile.password_hash
+      // Don't expose the actual hash to the client
+      delete resolvedProfile.password_hash
     }
 
     return NextResponse.json({ profile: resolvedProfile }, { status: 200 })

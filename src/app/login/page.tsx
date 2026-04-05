@@ -80,6 +80,10 @@ function LoginPageInner() {
 
       if (!res.ok) {
         setError(data.error || 'Incorrect email or password.')
+      } else if (data.message && data.message.includes('Password set')) {
+        // Google user just set their password for the first time
+        setSuccess(data.message)
+        setTimeout(() => { window.location.href = '/dashboard' }, 1500)
       } else {
         window.location.href = '/dashboard'
       }
