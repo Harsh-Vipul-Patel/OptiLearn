@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useSession, signOut } from '@/components/Providers'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
@@ -8,45 +8,75 @@ import { getEmailLocalPart } from '@/lib/auth/email'
 
 const NAV_ITEMS = [
   {
-    section: 'Overview',
-    links: [
-      { href: '/dashboard',           label: 'Dashboard',     icon: <DashboardIcon /> },
-      { href: '/dashboard/planner',   label: 'Study Planner', icon: <PlannerIcon /> },
-      { href: '/dashboard/logger',    label: 'Log Session',   icon: <LoggerIcon /> },
-    ],
+    href: '/dashboard',
+    label: 'Dashboard',
+    desc: 'Your daily overview, stats & goal ring',
+    icon: <DashboardIcon />,
   },
   {
-    section: 'Insights',
-    links: [
-      { href: '/dashboard/analytics', label: 'Analytics',   icon: <AnalyticsIcon /> },
-      { href: '/dashboard/insights',  label: 'AI Insights',  icon: <InsightsIcon /> },
-    ],
+    href: '/dashboard/planner',
+    label: 'Study Planner',
+    desc: 'Build your day, drag & drop subjects',
+    icon: <PlannerIcon />,
+  },
+  {
+    href: '/dashboard/logger',
+    label: 'Log Session',
+    desc: 'Record focus, fatigue & distractions',
+    icon: <LoggerIcon />,
+  },
+  {
+    href: '/dashboard/analytics',
+    label: 'Analytics',
+    desc: 'Charts, heatmap & weekly breakdown',
+    icon: <AnalyticsIcon />,
+  },
+  {
+    href: '/dashboard/insights',
+    label: 'AI Insights',
+    desc: 'Personalised recommendations & burnout alerts',
+    icon: <InsightsIcon />,
   },
 ]
 
 export function Sidebar() {
   const { data: session } = useSession()
   const pathname = usePathname()
-  const [mobileOpen, setMobileOpen] = useState(false)
-  const [isSmallScreen, setIsSmallScreen] = useState(false)
+  const [open, setOpen] = useState(false)
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
 
+  const close = useCallback(() => setOpen(false), [])
+  const toggle = useCallback(() => setOpen((o) => !o), [])
+
+  // Close on route change
   useEffect(() => {
-    const media = window.matchMedia('(max-width: 768px)')
-    const sync = () => setIsSmallScreen(media.matches)
-    sync()
-    media.addEventListener('change', sync)
-    return () => media.removeEventListener('change', sync)
-  }, [])
+    close()
+  }, [pathname, close])
 
-  const effectiveCollapsed = false
+  // Close on Escape key
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') close()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [close])
 
-  const email    = session?.user?.email || ''
+  // Prevent body scroll when open
+  useEffect(() => {
+    if (open) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = ''
+    }
+    return () => { document.body.style.overflow = '' }
+  }, [open])
+
+  const email = session?.user?.email || ''
   const emailPrefix = getEmailLocalPart(email)
-  const name     = session?.user?.name || emailPrefix || 'User'
+  const name = session?.user?.name || emailPrefix || 'User'
   const initials = name.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()
-
-  const close = () => setMobileOpen(false)
+  const currentPage = NAV_ITEMS.find(n => n.href === pathname)?.label || 'Dashboard'
 
   const handleLogout = async () => {
     setShowLogoutConfirm(false)
@@ -55,88 +85,84 @@ export function Sidebar() {
 
   return (
     <>
-      {/* ── Global sidebar toggle (all screens) ── */}
-      {isSmallScreen && (
-        <button
-          className={`sidebar-global-toggle is-mobile${mobileOpen ? ' is-open' : ''}`}
-          onClick={() => setMobileOpen(o => !o)}
-          aria-label={mobileOpen ? 'Close navigation menu' : 'Open navigation menu'}
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            {mobileOpen
-              ? <><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>
-              : <><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></>
-            }
-          </svg>
-        </button>
-      )}
+      {/* ── Centered Pill Top Bar ── */}
+      <header className="topbar">
+        <div className="topbar-pill">
+          <button
+            type="button"
+            className="topbar-nav-trigger"
+            onClick={toggle}
+            aria-label="Open navigation menu"
+            aria-expanded={open}
+          >
+            <span className="topbar-logo">OptiLearn</span>
+            <span className="topbar-divider"/>
+            <span className="topbar-page">{currentPage}</span>
+          </button>
+          <Link
+            href="/dashboard/profile"
+            className="topbar-avatar"
+            title={name}
+            aria-label="Open profile"
+          >
+            {initials}
+          </Link>
+        </div>
+      </header>
 
-      {/* ── Mobile Backdrop ── */}
+      {/* ── Backdrop ── */}
       <div
-        className={`sidebar-backdrop${mobileOpen ? ' open' : ''}`}
+        className={`sidebar-backdrop${open ? ' open' : ''}`}
         onClick={close}
         aria-hidden="true"
       />
 
-      {/* ── Sidebar ── */}
-      <aside className={`sidebar${mobileOpen ? ' open' : ''}${effectiveCollapsed ? ' collapsed' : ''}`}>
-
-        {/* Logo */}
-        <div className="logo">
-          <div className="logo-mark">
-            {effectiveCollapsed ? 'OL' : 'OptiLearn'}
-          </div>
-          {!effectiveCollapsed && <div className="logo-sub">Study Intelligence</div>}
+      {/* ── Floating Navigation Panel ── */}
+      <aside className={`sidebar-panel${open ? ' open' : ''}`}>
+        {/* Header */}
+        <div className="sidebar-panel-header">
+          <span className="sidebar-panel-title">NAVIGATE</span>
+          <button className="sidebar-panel-close" onClick={close} aria-label="Close navigation">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+              <line x1="18" y1="6" x2="6" y2="18"/>
+              <line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
         </div>
 
-        {/* Nav */}
-        <nav className="nav">
-          {NAV_ITEMS.map((group) => (
-            <div key={group.section}>
-              {!effectiveCollapsed && <span className="nav-section">{group.section}</span>}
-              {group.links.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`nav-item${pathname === item.href ? ' active' : ''}`}
-                  onClick={close}
-                  title={effectiveCollapsed ? item.label : undefined}
-                >
-                  <span className="nav-icon">{item.icon}</span>
-                  {!effectiveCollapsed && <span className="nav-label">{item.label}</span>}
-                </Link>
-              ))}
-            </div>
-          ))}
+        {/* Nav Items */}
+        <nav className="sidebar-panel-nav">
+          {NAV_ITEMS.map((item) => {
+            const isActive = pathname === item.href
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`sidebar-panel-item${isActive ? ' active' : ''}`}
+                onClick={close}
+              >
+                <span className={`sidebar-panel-icon${isActive ? ' active' : ''}`}>{item.icon}</span>
+                <div className="sidebar-panel-item-text">
+                  <span className="sidebar-panel-item-label">{item.label}</span>
+                  <span className="sidebar-panel-item-desc">{item.desc}</span>
+                </div>
+              </Link>
+            )
+          })}
         </nav>
 
-        {/* User card */}
-        {effectiveCollapsed ? (
-          <Link href="/dashboard/profile" className="user-card-collapsed" onClick={close} title={name}>
-            <div className="avatar">{initials}</div>
-          </Link>
-        ) : (
-          <Link href="/dashboard/profile" className="user-card" onClick={close} style={{ textDecoration: 'none' }}>
-            <div className="avatar">{initials}</div>
-            <div>
-              <div className="user-name">{name}</div>
-              <div className="user-exam">{email}</div>
-            </div>
-          </Link>
-        )}
-
         {/* Logout */}
-        <button className="sidebar-logout" onClick={() => setShowLogoutConfirm(true)} title={effectiveCollapsed ? 'Log out' : undefined}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <button className="sidebar-panel-logout" onClick={() => setShowLogoutConfirm(true)}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
             <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
             <polyline points="16 17 21 12 16 7"/>
             <line x1="21" y1="12" x2="9" y2="12"/>
           </svg>
-          {!effectiveCollapsed && <span>Log out</span>}
+          <span>Log out of OptiLearn</span>
         </button>
-
       </aside>
 
+      {/* Logout confirmation */}
       {showLogoutConfirm && (
         <div className="logout-confirm-overlay" role="dialog" aria-modal="true" aria-labelledby="logout-confirm-title">
           <div className="logout-confirm-card">
@@ -160,10 +186,10 @@ export function Sidebar() {
 function DashboardIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <rect x="3" y="3" width="7" height="7" rx="1"/>
-      <rect x="14" y="3" width="7" height="7" rx="1"/>
-      <rect x="14" y="14" width="7" height="7" rx="1"/>
-      <rect x="3" y="14" width="7" height="7" rx="1"/>
+      <rect x="3" y="3" width="7" height="7" rx="2"/>
+      <rect x="14" y="3" width="7" height="7" rx="2"/>
+      <rect x="14" y="14" width="7" height="7" rx="2"/>
+      <rect x="3" y="14" width="7" height="7" rx="2"/>
     </svg>
   )
 }

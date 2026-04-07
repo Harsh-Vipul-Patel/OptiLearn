@@ -60,6 +60,7 @@ export function AnalyticsPage() {
   const planVsActualMonthRef = useRef<HTMLCanvasElement>(null)
   const subjectMonthRef = useRef<HTMLCanvasElement>(null)
   const effMonthRef = useRef<HTMLCanvasElement>(null)
+  const subjectBreakdownMonthRef = useRef<HTMLCanvasElement>(null)
 
   const [tab, setTab] = useState<'week' | 'month'>('week')
   const [monthWeekFilter, setMonthWeekFilter] = useState('all')
@@ -260,6 +261,46 @@ export function AnalyticsPage() {
   
   const monthAvgEffSeries = monthEffData.map((e, i) => monthEffCounts[i] ? Number((e / monthEffCounts[i]).toFixed(1)) : 0)
 
+  // ── Monthly Subject Breakdown (per-day-per-subject line chart data) ──
+  const MONTH_DAY_COUNT = 14 // show last 14 days for readability
+  const monthBreakdownDates = Array.from({ length: MONTH_DAY_COUNT }, (_, i) => {
+    const d = new Date(todayStart)
+    d.setDate(todayStart.getDate() - (MONTH_DAY_COUNT - 1 - i))
+    return d
+  })
+  const monthBreakdownDateKeys = monthBreakdownDates.map(d => toLocalDateKey(d))
+  const monthBreakdownLabels = monthBreakdownDates.map(d =>
+    d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  )
+
+  // Gather all unique subjects
+  const allSubjects = new Set<string>()
+  typedLogs.forEach(log => {
+    const d = new Date(log.start_time || '')
+    if (Number.isNaN(d.getTime())) return
+    const key = toLocalDateKey(d)
+    if (monthBreakdownDateKeys.includes(key)) {
+      allSubjects.add(getSubjectName(log))
+    }
+  })
+
+  const subjectBreakdownMap: Record<string, number[]> = {}
+  allSubjects.forEach(s => { subjectBreakdownMap[s] = Array(MONTH_DAY_COUNT).fill(0) })
+
+  typedLogs.forEach(log => {
+    const d = new Date(log.start_time || '')
+    if (Number.isNaN(d.getTime())) return
+    const key = toLocalDateKey(d)
+    const dayIdx = monthBreakdownDateKeys.indexOf(key)
+    if (dayIdx === -1) return
+    const subj = getSubjectName(log)
+    if (subjectBreakdownMap[subj]) {
+      subjectBreakdownMap[subj][dayIdx] += getLogDurationHours(log)
+    }
+  })
+
+  const subjectBreakdownEntries = Object.entries(subjectBreakdownMap)
+
   // Heatmap
   const heatData = Array.from({length: 4}, () => Array(7).fill(0))
   monthLogs.forEach((l) => {
@@ -290,6 +331,8 @@ export function AnalyticsPage() {
        avgEff: monthAvgEffSeries,
        subjectLabels: monthSubjectLabels,
        subjectData: monthSubjectData,
+       breakdownLabels: monthBreakdownLabels,
+       breakdownEntries: subjectBreakdownEntries,
     },
     {
        planVsActualWeek: planVsActualRef,
@@ -297,7 +340,8 @@ export function AnalyticsPage() {
        focusWeek: focusTimeRef,
        planVsActualMonth: planVsActualMonthRef,
        subjectMonth: subjectMonthRef,
-       effMonth: effMonthRef
+       effMonth: effMonthRef,
+       subjectBreakdownMonth: subjectBreakdownMonthRef,
     }
   )
 
@@ -401,6 +445,18 @@ export function AnalyticsPage() {
               <div className="chart-wrap" style={{ height: 195 }}><canvas ref={effMonthRef} /></div>
             </div>
           </div>
+
+          <div className="card" style={{ marginTop: 18 }}>
+            <div className="section-title">Monthly Subject Breakdown</div>
+            <div style={{ fontSize: '11.5px', color: 'var(--text-soft)', marginBottom: 10 }}>Hours studied per subject over the last 14 days</div>
+            {subjectBreakdownEntries.length > 0 ? (
+              <div className="chart-wrap" style={{ height: 260 }}><canvas ref={subjectBreakdownMonthRef} /></div>
+            ) : (
+              <div className="chart-wrap" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 180, color: 'var(--text-soft)', fontSize: '13.5px' }}>
+                No sessions logged this month
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -425,6 +481,8 @@ function useCharts(
     subjectLabels: string[],
     subjectData: number[],
     avgEff: number[],
+    breakdownLabels: string[],
+    breakdownEntries: [string, number[]][],
   },
   refs: {
     planVsActualWeek: React.RefObject<HTMLCanvasElement | null>,
@@ -432,7 +490,8 @@ function useCharts(
     focusWeek: React.RefObject<HTMLCanvasElement | null>,
     planVsActualMonth: React.RefObject<HTMLCanvasElement | null>,
     subjectMonth: React.RefObject<HTMLCanvasElement | null>,
-    effMonth: React.RefObject<HTMLCanvasElement | null>
+    effMonth: React.RefObject<HTMLCanvasElement | null>,
+    subjectBreakdownMonth: React.RefObject<HTMLCanvasElement | null>,
   }
 ) {
   useEffect(() => {
@@ -456,6 +515,7 @@ function useCharts(
       destroyExistingOnCanvas(refs.planVsActualMonth.current, Chart)
       destroyExistingOnCanvas(refs.subjectMonth.current, Chart)
       destroyExistingOnCanvas(refs.effMonth.current, Chart)
+      destroyExistingOnCanvas(refs.subjectBreakdownMonth.current, Chart)
     }
 
     const buildWeek = () => {
@@ -640,6 +700,53 @@ function useCharts(
           },
         }))
       }
+
+      // Subject Breakdown multi-line chart
+      if (refs.subjectBreakdownMonth.current && monthData.breakdownEntries.length > 0) {
+        destroyExistingOnCanvas(refs.subjectBreakdownMonth.current, Chart)
+        const lineColors = ['#3D4F8C','#C96B3A','#6B9B7A','#D4A843','#B85C7A','#2A8C8C','#6B4F8C']
+        const bgColors  = ['rgba(61,79,140,.08)','rgba(201,107,58,.08)','rgba(107,155,122,.08)','rgba(212,168,67,.08)','rgba(184,92,122,.08)','rgba(42,140,140,.08)','rgba(107,79,140,.08)']
+        const datasets = monthData.breakdownEntries.map(([name, data]: [string, number[]], idx: number) => ({
+          label: name,
+          data: data.map((v: number) => Number(v.toFixed(2))),
+          borderColor: lineColors[idx % lineColors.length],
+          backgroundColor: bgColors[idx % bgColors.length],
+          tension: .4,
+          fill: idx === 0,
+          pointBackgroundColor: lineColors[idx % lineColors.length],
+          pointRadius: 3,
+          pointHoverRadius: 5,
+          borderWidth: 2.5,
+          clip: false,
+        }))
+        charts.push(new Chart(refs.subjectBreakdownMonth.current, {
+          type: 'line',
+          data: { labels: monthData.breakdownLabels, datasets },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            layout: { padding: { top: 8, right: 10, bottom: 6, left: 4 } },
+            plugins: {
+              legend: {
+                position: 'top',
+                labels: { font: CHART_FONT, boxWidth: 10, boxHeight: 10, padding: 14 },
+              },
+            },
+            scales: {
+              x: {
+                offset: true,
+                ticks: { font: CHART_FONT, padding: 8, maxRotation: 0 },
+                grid: { display: false },
+              },
+              y: {
+                min: 0,
+                ticks: { font: CHART_FONT, padding: 6, callback: (v: number) => v + 'h' },
+                grid: { color: 'rgba(100,80,50,.06)' },
+              },
+            },
+          },
+        }))
+      }
     }
 
     const handleChartReady = () => {
@@ -679,6 +786,7 @@ function useCharts(
     tab,
     weekData.labels.join(','), weekData.planned.join(','), weekData.actual.join(','), weekData.avgFocus.join(','), weekData.subjectLabels.join(','), weekData.subjectData.join(','),
     monthData.labels.join(','), monthData.planned.join(','), monthData.actual.join(','), monthData.avgEff.join(','), monthData.subjectLabels.join(','), monthData.subjectData.join(','),
-    refs.planVsActualWeek, refs.subjectWeek, refs.focusWeek, refs.planVsActualMonth, refs.subjectMonth, refs.effMonth
+    monthData.breakdownLabels.join(','), monthData.breakdownEntries.map(([n,d]) => n+':'+d.join('|')).join(','),
+    refs.planVsActualWeek, refs.subjectWeek, refs.focusWeek, refs.planVsActualMonth, refs.subjectMonth, refs.effMonth, refs.subjectBreakdownMonth
   ]) // Update when live data loads
 }

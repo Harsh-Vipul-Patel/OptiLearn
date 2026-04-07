@@ -1,15 +1,19 @@
 "use client"
 
-import { createContext, useContext, useEffect, useState } from "react"
+import { createContext, useCallback, useContext, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 
 /* ── Auth Session ── */
 type SessionUser = { id: string; email?: string; name?: string }
 type SessionContextType = {
   data: { user: SessionUser } | null
+  refreshSession: () => Promise<void>
 }
 
-const SessionContext = createContext<SessionContextType>({ data: null })
+const SessionContext = createContext<SessionContextType>({
+  data: null,
+  refreshSession: async () => {},
+})
 
 /* ── Sidebar ── */
 type SidebarContextType = {
@@ -27,6 +31,20 @@ export function Providers({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(true)
   const router = useRouter()
 
+  const refreshSession = useCallback(async () => {
+    try {
+      const res = await fetch('/api/auth/me', { credentials: 'include' })
+      const data = res.ok ? await res.json() : null
+      if (data?.user) {
+        setSession({ user: data.user })
+      } else {
+        setSession(null)
+      }
+    } catch {
+      setSession(null)
+    }
+  }, [])
+
   useEffect(() => {
     const stored = localStorage.getItem('ol_sidebar_collapsed')
     setCollapsed(stored === 'false' ? false : true)
@@ -42,21 +60,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   /* Auth — fetch current user from JWT cookie */
   useEffect(() => {
-    fetch('/api/auth/me', { credentials: 'include' })
-      .then(res => res.ok ? res.json() : null)
-      .then(data => {
-        if (data?.user) {
-          setSession({ user: data.user })
-        } else {
-          setSession(null)
-        }
-      })
-      .catch(() => setSession(null))
-  }, [])
+    void refreshSession()
+  }, [refreshSession])
 
   return (
     <SidebarContext.Provider value={{ collapsed, toggleSidebar }}>
-      <SessionContext.Provider value={{ data: session }}>
+      <SessionContext.Provider value={{ data: session, refreshSession }}>
         {children}
       </SessionContext.Provider>
     </SidebarContext.Provider>

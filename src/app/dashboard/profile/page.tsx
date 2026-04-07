@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useToast } from '@/components/ui/Toast'
 import { CustomSelect } from '@/components/ui/CustomSelect'
+import { useSession } from '@/components/Providers'
 
 type ProfileData = {
   user_id?: string
@@ -16,6 +17,7 @@ type ProfileData = {
 
 export default function ProfilePage() {
   const { showToast } = useToast()
+  const { refreshSession } = useSession()
   const [profile, setProfile] = useState<ProfileData | null>(null)
 
   const [name, setName] = useState('')
@@ -87,6 +89,7 @@ export default function ProfilePage() {
           setExamType(data.profile.exam_type || '')
           setPreferredTime(data.profile.preferred_time || '')
         }
+        await refreshSession()
         setIsEditing(false)
         showToast('Profile successfully updated! ✦')
       } else {

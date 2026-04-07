@@ -5,6 +5,9 @@ import { Providers } from '@/components/Providers'
 export const metadata: Metadata = {
   title: 'OptiLearn — Study Smarter',
   description: 'AI-powered study intelligence. Track sessions, beat burnout, hit your goals.',
+  icons: {
+    icon: '/icon.svg?v=2',
+  },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

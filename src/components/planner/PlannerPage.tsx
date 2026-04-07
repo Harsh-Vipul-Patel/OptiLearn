@@ -1092,9 +1092,12 @@ export function PlannerPage() {
                           const c = s ? s.color : PALETTE[0]
                           return (
                             <div key={blk.id} className="planner-block" style={{ background: c.light, borderLeftColor: c.hex }}>
-                              <div style={{ flex: 1 }}>
-                                <div className="pb-subj" style={{ color: c.hex, display: 'inline-flex', alignItems: 'center', gap: 6 }}><BookIcon width={14} height={14} />{s?.name || 'Unknown'}</div>
-                                <div className="pb-meta">
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div className="pb-subj" style={{ color: c.hex, display: 'inline-flex', alignItems: 'center', gap: 6, width: '100%' }}>
+                                  <BookIcon width={14} height={14} />
+                                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s?.name || 'Unknown'}</span>
+                                </div>
+                                <div className="pb-meta" style={{ overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', whiteSpace: 'normal', lineHeight: 1.4 }}>
                                   {blk.topic || 'General study'} · {blk.dur}min · 
                                   {formatPlanScheduleLabel({ start_time: blk.startTime, end_time: blk.endTime, time_slot: blk.time }, { durationMin: blk.dur, fallback: formatSessionRange(blk.time, blk.dur, slotRanges) || 'Anytime' })} · {blk.diff}
                                 </div>
