@@ -5,6 +5,11 @@ import { getEmailLocalPart, getFallbackUserEmail } from '@/lib/auth/email'
 
 const VALID_EXAM_TYPES = new Set(['JEE', 'NEET', 'Boards', 'Others'])
 const VALID_PREFERRED_TIMES = new Set(['Morning', 'Afternoon', 'Evening', 'Night'])
+const NO_STORE_HEADERS = {
+  'Cache-Control': 'no-store, no-cache, must-revalidate, private',
+  Pragma: 'no-cache',
+  Expires: '0',
+}
 
 function normalizeExamType(value: unknown): string | null {
   if (typeof value !== 'string') return null
@@ -38,7 +43,7 @@ export async function GET(request: Request) {
   try {
     const user = getAuthUser(request)
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: NO_STORE_HEADERS })
     }
 
     const supabase = createClient()
@@ -84,13 +89,13 @@ export async function GET(request: Request) {
       delete resolvedProfile.password_hash
     }
 
-    return NextResponse.json({ profile: resolvedProfile }, { status: 200 })
+    return NextResponse.json({ profile: resolvedProfile }, { status: 200, headers: NO_STORE_HEADERS })
   } catch (error) {
     console.error('[profile/GET]', error)
     if (error instanceof Error) {
-      return NextResponse.json({ error: error.message }, { status: 400 })
+      return NextResponse.json({ error: error.message }, { status: 400, headers: NO_STORE_HEADERS })
     }
-    return NextResponse.json({ error: 'Unknown error' }, { status: 400 })
+    return NextResponse.json({ error: 'Unknown error' }, { status: 400, headers: NO_STORE_HEADERS })
   }
 }
 
@@ -98,7 +103,7 @@ export async function PUT(request: Request) {
   try {
     const user = getAuthUser(request)
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: NO_STORE_HEADERS })
     }
 
     const supabase = createClient()
@@ -133,12 +138,12 @@ export async function PUT(request: Request) {
       profile.preferred_time = profile.preferred_study_time || ''
     }
 
-    return NextResponse.json({ profile }, { status: 200 })
+    return NextResponse.json({ profile }, { status: 200, headers: NO_STORE_HEADERS })
   } catch (error) {
     console.error('[profile/PUT]', error)
     if (error instanceof Error) {
-      return NextResponse.json({ error: error.message }, { status: 400 })
+      return NextResponse.json({ error: error.message }, { status: 400, headers: NO_STORE_HEADERS })
     }
-    return NextResponse.json({ error: 'Unknown error' }, { status: 400 })
+    return NextResponse.json({ error: 'Unknown error' }, { status: 400, headers: NO_STORE_HEADERS })
   }
 }

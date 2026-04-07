@@ -39,6 +39,16 @@ const NAV_ITEMS = [
   },
 ]
 
+function getCurrentPageLabel(pathname: string): string {
+  if (pathname === '/dashboard/profile') return 'Profile'
+
+  const match = NAV_ITEMS
+    .filter((item) => pathname === item.href || pathname.startsWith(`${item.href}/`))
+    .sort((a, b) => b.href.length - a.href.length)[0]
+
+  return match?.label || 'Dashboard'
+}
+
 export function Sidebar() {
   const { data: session } = useSession()
   const pathname = usePathname()
@@ -76,7 +86,7 @@ export function Sidebar() {
   const emailPrefix = getEmailLocalPart(email)
   const name = session?.user?.name || emailPrefix || 'User'
   const initials = name.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()
-  const currentPage = NAV_ITEMS.find(n => n.href === pathname)?.label || 'Dashboard'
+  const currentPage = getCurrentPageLabel(pathname)
 
   const handleLogout = async () => {
     setShowLogoutConfirm(false)

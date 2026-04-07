@@ -33,7 +33,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   const refreshSession = useCallback(async () => {
     try {
-      const res = await fetch('/api/auth/me', { credentials: 'include' })
+      const res = await fetch('/api/auth/me', { credentials: 'include', cache: 'no-store' })
       const data = res.ok ? await res.json() : null
       if (data?.user) {
         setSession({ user: data.user })

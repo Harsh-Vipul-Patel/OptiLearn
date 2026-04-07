@@ -63,7 +63,10 @@ export function AnalyticsPage() {
   const subjectBreakdownMonthRef = useRef<HTMLCanvasElement>(null)
 
   const [tab, setTab] = useState<'week' | 'month'>('week')
-  const [monthWeekFilter, setMonthWeekFilter] = useState('all')
+  const [planVsActualFilter, setPlanVsActualFilter] = useState('all')
+  const [subjectMonthFilter, setSubjectMonthFilter] = useState('all')
+  const [effMonthFilter, setEffMonthFilter] = useState('all')
+  const [breakdownMonthFilter, setBreakdownMonthFilter] = useState('all')
   
   // Data Aggregations
   const now = new Date()
@@ -81,6 +84,18 @@ export function AnalyticsPage() {
   const monthLogs = typedLogs.filter((l) => {
     const startedAt = new Date(l.start_time || '')
     return !Number.isNaN(startedAt.getTime()) && startedAt >= monthStart
+  })
+
+  const getFilteredLogs = (sourceLogs: StudyLog[], filterVal: string) => sourceLogs.filter((log) => {
+    if (filterVal === 'all') return true
+    const startedAt = new Date(log.start_time || '')
+    if (Number.isNaN(startedAt.getTime())) return false
+    const dayDist = Math.floor((now.getTime() - startedAt.getTime()) / 86400000)
+    if (dayDist >= 0 && dayDist < 28) {
+      const weekIdx = 3 - Math.floor(dayDist / 7)
+      return Number(filterVal) === weekIdx
+    }
+    return false
   })
 
   const calculateStats = (filteredLogs: StudyLog[]) => {
@@ -106,6 +121,7 @@ export function AnalyticsPage() {
 
   const wStats = calculateStats(weekLogs)
   const mStats = calculateStats(monthLogs)
+
 
   const WEEK_STATS = [
     { value: wStats.totalHours, label: 'Total This Week',  color: 'var(--terra)' },
@@ -201,19 +217,7 @@ export function AnalyticsPage() {
   const { labels: subjectLabels, data: subjectData } = buildSubjectHours(weekLogs)
   
   // Month Charts Data
-  const filteredMonthLogs = monthLogs.filter((log) => {
-    if (monthWeekFilter === 'all') return true
-    const startedAt = new Date(log.start_time || '')
-    if (Number.isNaN(startedAt.getTime())) return false
-    const dayDist = Math.floor((now.getTime() - startedAt.getTime()) / 86400000)
-    if (dayDist >= 0 && dayDist < 28) {
-      const weekIdx = 3 - Math.floor(dayDist / 7)
-      return Number(monthWeekFilter) === weekIdx
-    }
-    return false
-  })
-
-  const { labels: monthSubjectLabels, data: monthSubjectData } = buildSubjectHours(filteredMonthLogs)
+  const { labels: monthSubjectLabels, data: monthSubjectData } = buildSubjectHours(getFilteredLogs(monthLogs, subjectMonthFilter))
   
   const monthWeekdayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
   const monthPlannedData = Array(7).fill(0)
@@ -227,7 +231,7 @@ export function AnalyticsPage() {
     const dayDist = Math.floor((now.getTime() - startedAt.getTime()) / 86400000)
     if (dayDist >= 0 && dayDist < 28) {
       const weekIdx = 3 - Math.floor(dayDist / 7)
-      if (monthWeekFilter === 'all' || Number(monthWeekFilter) === weekIdx) {
+      if (planVsActualFilter === 'all' || Number(planVsActualFilter) === weekIdx) {
         const dWeekDay = startedAt.getDay()
         const dayIdx = dWeekDay === 0 ? 6 : dWeekDay - 1
         monthPlannedData[dayIdx] += Number(p.target_duration || 0) / 60
@@ -242,16 +246,21 @@ export function AnalyticsPage() {
     
     if (dayDist >= 0 && dayDist < 28) {
       const weekIdx = 3 - Math.floor(dayDist / 7)
-      if (monthWeekFilter === 'all' || Number(monthWeekFilter) === weekIdx) {
+      
+      if (planVsActualFilter === 'all' || Number(planVsActualFilter) === weekIdx) {
         const day = startedAt.getDay()
         const idx = day === 0 ? 6 : day - 1
         monthActualData[idx] += getLogDurationHours(log)
+      }
         
+      if (effMonthFilter === 'all' || Number(effMonthFilter) === weekIdx) {
         let eff = parseEfficiencyPercent(log.efficiency)
         if (eff === null && Number.isFinite(Number(log.focus_level))) {
           eff = clampPercent((Number(log.focus_level) / 5) * 100)
         }
         if (eff !== null) {
+          const day = startedAt.getDay()
+          const idx = day === 0 ? 6 : day - 1
           monthEffData[idx] += eff
           monthEffCounts[idx] += 1
         }
@@ -262,10 +271,19 @@ export function AnalyticsPage() {
   const monthAvgEffSeries = monthEffData.map((e, i) => monthEffCounts[i] ? Number((e / monthEffCounts[i]).toFixed(1)) : 0)
 
   // ── Monthly Subject Breakdown (per-day-per-subject line chart data) ──
-  const MONTH_DAY_COUNT = 14 // show last 14 days for readability
-  const monthBreakdownDates = Array.from({ length: MONTH_DAY_COUNT }, (_, i) => {
-    const d = new Date(todayStart)
-    d.setDate(todayStart.getDate() - (MONTH_DAY_COUNT - 1 - i))
+  let breakdownDayCount = 28
+  let breakdownEndDate = new Date(todayStart)
+
+  if (breakdownMonthFilter !== 'all') {
+    breakdownDayCount = 7
+    const weekIdx = Number(breakdownMonthFilter)
+    const daysAgo = (3 - weekIdx) * 7
+    breakdownEndDate.setDate(todayStart.getDate() - daysAgo)
+  }
+
+  const monthBreakdownDates = Array.from({ length: breakdownDayCount }, (_, i) => {
+    const d = new Date(breakdownEndDate)
+    d.setDate(breakdownEndDate.getDate() - (breakdownDayCount - 1 - i))
     return d
   })
   const monthBreakdownDateKeys = monthBreakdownDates.map(d => toLocalDateKey(d))
@@ -273,9 +291,10 @@ export function AnalyticsPage() {
     d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
   )
 
-  // Gather all unique subjects
+  // Gather all unique subjects within the selected monthly filter
+  const breakdownLogs = getFilteredLogs(monthLogs, breakdownMonthFilter)
   const allSubjects = new Set<string>()
-  typedLogs.forEach(log => {
+  breakdownLogs.forEach(log => {
     const d = new Date(log.start_time || '')
     if (Number.isNaN(d.getTime())) return
     const key = toLocalDateKey(d)
@@ -285,9 +304,9 @@ export function AnalyticsPage() {
   })
 
   const subjectBreakdownMap: Record<string, number[]> = {}
-  allSubjects.forEach(s => { subjectBreakdownMap[s] = Array(MONTH_DAY_COUNT).fill(0) })
+  allSubjects.forEach(s => { subjectBreakdownMap[s] = Array(breakdownDayCount).fill(0) })
 
-  typedLogs.forEach(log => {
+  breakdownLogs.forEach(log => {
     const d = new Date(log.start_time || '')
     if (Number.isNaN(d.getTime())) return
     const key = toLocalDateKey(d)
@@ -419,11 +438,11 @@ export function AnalyticsPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginBottom: 8 }}>
               <div className="section-title" style={{ marginBottom: 0 }}>Planned vs Actual</div>
               <CustomSelect
-                value={monthWeekFilter}
-                onChange={setMonthWeekFilter}
+                value={planVsActualFilter}
+                onChange={setPlanVsActualFilter}
                 options={monthWeekFilterOptions}
-                ariaLabel="Filter monthly chart by week"
-                style={{ width: 240 }}
+                ariaLabel="Filter Planned vs Actual chart by week"
+                style={{ width: 200 }}
               />
             </div>
             <div className="chart-wrap" style={{ height: 280 }}><canvas ref={planVsActualMonthRef} /></div>
@@ -431,7 +450,16 @@ export function AnalyticsPage() {
 
           <div className="grid-2">
             <div className="card">
-              <div className="section-title">Hours by Subject</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                <div className="section-title" style={{ marginBottom: 0 }}>Hours by Subject</div>
+                <CustomSelect
+                  value={subjectMonthFilter}
+                  onChange={setSubjectMonthFilter}
+                  options={monthWeekFilterOptions}
+                  ariaLabel="Filter Hours by Subject chart by week"
+                  style={{ width: 170 }}
+                />
+              </div>
               {monthSubjectData.length > 0 ? (
                 <div className="chart-wrap"><canvas ref={subjectMonthRef} /></div>
               ) : (
@@ -441,19 +469,39 @@ export function AnalyticsPage() {
               )}
             </div>
             <div className="card">
-              <div className="section-title">Efficiency by Weekday</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                <div className="section-title" style={{ marginBottom: 0 }}>Efficiency by Weekday</div>
+                <CustomSelect
+                  value={effMonthFilter}
+                  onChange={setEffMonthFilter}
+                  options={monthWeekFilterOptions}
+                  ariaLabel="Filter Efficiency by Weekday chart by week"
+                  style={{ width: 170 }}
+                />
+              </div>
               <div className="chart-wrap" style={{ height: 195 }}><canvas ref={effMonthRef} /></div>
             </div>
           </div>
 
           <div className="card" style={{ marginTop: 18 }}>
-            <div className="section-title">Monthly Subject Breakdown</div>
-            <div style={{ fontSize: '11.5px', color: 'var(--text-soft)', marginBottom: 10 }}>Hours studied per subject over the last 14 days</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+              <div>
+                <div className="section-title" style={{ marginBottom: 0 }}>Monthly Subject Breakdown</div>
+                <div style={{ fontSize: '11.5px', color: 'var(--text-soft)', marginTop: 4, marginBottom: 10 }}>Hours studied per subject over the selected monthly filter</div>
+              </div>
+              <CustomSelect
+                value={breakdownMonthFilter}
+                onChange={setBreakdownMonthFilter}
+                options={monthWeekFilterOptions}
+                ariaLabel="Filter Monthly Subject Breakdown chart by week"
+                style={{ width: 200 }}
+              />
+            </div>
             {subjectBreakdownEntries.length > 0 ? (
               <div className="chart-wrap" style={{ height: 260 }}><canvas ref={subjectBreakdownMonthRef} /></div>
             ) : (
               <div className="chart-wrap" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 180, color: 'var(--text-soft)', fontSize: '13.5px' }}>
-                No sessions logged this month
+                No sessions logged for the selected filter
               </div>
             )}
           </div>
