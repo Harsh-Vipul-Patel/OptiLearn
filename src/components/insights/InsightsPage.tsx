@@ -2,11 +2,13 @@
 
 import { useSession } from '@/components/Providers'
 import { useSuggestionsSync } from '@/hooks/useStudyLogSync'
+import { useCheckin } from '@/hooks/useCheckin'
 import { useToast } from '@/components/ui/Toast'
 import { Badge } from '@/components/ui/Badge'
 import { Card } from '@/components/ui/Card'
 import { ReactNode, useMemo, useState } from 'react'
 import { ThumbsDownIcon, ThumbsUpIcon } from '@/components/ui/AppIcons'
+import { DailyCheckinModal } from '@/components/dashboard/DailyCheckinModal'
 
 type SuggestionRow = {
   id?: string
@@ -34,19 +36,26 @@ function badgeFromReaction(reaction: FeedbackState): { badge: 'sage' | 'terra' |
 export function InsightsPage() {
   const { data: session } = useSession()
   const { suggestions, refreshSuggestions, isLoading } = useSuggestionsSync(session?.user?.id || '')
+  const { checkin, refreshCheckin, isLoading: checkinLoading } = useCheckin(session?.user?.id || '')
   const { showToast } = useToast()
   const [feedbackBySuggestion, setFeedbackBySuggestion] = useState<Record<string, FeedbackState>>({})
   const [isGeneratingInsights, setIsGeneratingInsights] = useState(false)
+  const [showCheckinModal, setShowCheckinModal] = useState(false)
+
+  // Check-in is pending when: not loading, no check-in found, user is logged in
+  const checkinPending = !checkinLoading && !checkin && !!session?.user?.id
 
   const normalized = useMemo(() => {
     return (suggestions as SuggestionRow[])
       .map((item) => {
         const id = item.id ?? item.suggestion_id
         const text = item.suggestion_text?.trim() || ''
+        const isPlan = text.startsWith('📋') || (item.suggestion_type || '').toLowerCase().includes('plan')
         return {
           id,
           text,
-          type: item.suggestion_type || 'General',
+          type: isPlan ? '📋 Plan' : (item.suggestion_type || 'General'),
+          isPlan,
           created_at: item.created_at,
         }
       })
@@ -115,10 +124,24 @@ export function InsightsPage() {
     }
   }
 
+  const handleCheckinComplete = () => {
+    setShowCheckinModal(false)
+    refreshCheckin()
+    showToast('Check-in saved! Generate insights now for personalised planning suggestions.', 'info')
+  }
+
   const topText = top?.text || 'No AI insights yet. Log a study session to generate personalized recommendations.'
 
   return (
     <div>
+      {/* Check-in Modal (triggered from insights page) */}
+      {showCheckinModal && (
+        <DailyCheckinModal
+          onComplete={handleCheckinComplete}
+          onSkip={() => setShowCheckinModal(false)}
+        />
+      )}
+
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 6, flexWrap: 'wrap' }}>
         <div className="page-title" style={{ marginBottom: 0 }}>AI Insights</div>
         <button
@@ -132,6 +155,22 @@ export function InsightsPage() {
         </button>
       </div>
       <div className="page-sub">Personalised, non-judgmental guidance based on your actual study data.</div>
+
+      {/* Pending check-in banner */}
+      {checkinPending && (
+        <div className="checkin-pending-banner">
+          <div className="checkin-pending-banner-icon">🌅</div>
+          <div className="checkin-pending-banner-content">
+            <div className="checkin-pending-banner-title">Daily check-in pending</div>
+            <div className="checkin-pending-banner-sub">
+              Complete your wellness check-in to get personalised planning suggestions based on how you&apos;re feeling today.
+            </div>
+          </div>
+          <button className="checkin-pending-banner-btn" onClick={() => setShowCheckinModal(true)}>
+            Fill Check-in →
+          </button>
+        </div>
+      )}
 
       <div className="grid-2" style={{ marginBottom: 20 }}>
         <div className="insight-card">
@@ -201,9 +240,10 @@ export function InsightsPage() {
               const badgeMeta = badgeFromReaction(reaction)
 
               return (
-                <div key={item.id || `${item.text}-${index}`} style={{ display: 'flex', gap: 11, alignItems: 'center', padding: '10px 13px', background: 'var(--cream)', borderRadius: 'var(--r-sm)' }}>
+                <div key={item.id || `${item.text}-${index}`} style={{ display: 'flex', gap: 11, alignItems: 'center', padding: '10px 13px', background: item.isPlan ? 'linear-gradient(160deg, #F0F4FF 0%, #FAFBFF 100%)' : 'var(--cream)', borderRadius: 'var(--r-sm)', borderLeft: item.isPlan ? '3px solid var(--indigo)' : 'none' }}>
                   <div style={{ fontSize: 10, color: 'var(--text-soft)', minWidth: 58 }}>{formatInsightTime(item.created_at)}</div>
                   <div style={{ flex: 1, fontSize: '12.5px', color: 'var(--text-mid)' }}>{item.text}</div>
+                  {item.isPlan && <Badge variant="indigo">Plan</Badge>}
                   <Badge variant={badgeMeta.badge}>{badgeMeta.label}</Badge>
                 </div>
               )

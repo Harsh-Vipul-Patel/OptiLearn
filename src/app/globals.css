@@ -3169,4 +3169,533 @@ textarea,
   .insight-btn {
     text-align: center;
   }
+
+  .checkin-modal {
+    width: 95vw;
+    max-height: 88vh;
+  }
+
+  .checkin-rating-row,
+  .checkin-mood-row {
+    gap: 6px;
+  }
+
+  .checkin-rating-btn,
+  .checkin-mood-btn {
+    padding: 8px 6px;
+  }
+
+  .checkin-screen-row {
+    flex-direction: column;
+  }
+}
+
+/* ═══════════ DAILY CHECK-IN MODAL ═══════════ */
+@keyframes checkinOverlayIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes checkinModalIn {
+  from { opacity: 0; transform: translateY(30px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes checkinStepIn {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.checkin-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(18, 16, 14, 0.55);
+  backdrop-filter: blur(24px) saturate(0.8);
+  -webkit-backdrop-filter: blur(24px) saturate(0.8);
+  animation: checkinOverlayIn 0.3s ease both;
+}
+
+.checkin-modal {
+  width: 500px;
+  max-width: 95vw;
+  max-height: 88vh;
+  overflow-y: auto;
+  background: linear-gradient(165deg, #FFFDF9 0%, #FFF6EC 100%);
+  border-radius: var(--r-lg);
+  border: 1.5px solid rgba(201, 107, 58, 0.18);
+  box-shadow:
+    0 24px 64px rgba(30, 20, 10, 0.22),
+    0 8px 24px rgba(30, 20, 10, 0.12),
+    0 0 0 1px rgba(255, 255, 255, 0.6) inset;
+  padding: 28px 30px 24px;
+  animation: checkinModalIn 0.4s var(--ease-spring) both;
+}
+
+.checkin-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+
+.checkin-header-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.checkin-header-title {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-weight: 800;
+  font-size: 20px;
+  color: var(--text-dark);
+  line-height: 1.2;
+}
+
+.checkin-header-sub {
+  font-size: 13px;
+  color: var(--text-soft);
+  margin-top: 3px;
+}
+
+.checkin-skip {
+  border: none;
+  background: rgba(100, 80, 50, 0.06);
+  border-radius: 10px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-soft);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.checkin-skip:hover {
+  background: rgba(100, 80, 50, 0.12);
+  color: var(--terra);
+  transform: scale(1.05);
+}
+
+.checkin-progress-bar {
+  height: 4px;
+  background: var(--cream2);
+  border-radius: 999px;
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+
+.checkin-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--terra), #E08448);
+  border-radius: 999px;
+  transition: width 0.5s var(--ease-fluid);
+}
+
+.checkin-step-container {
+  min-height: 260px;
+}
+
+.checkin-step {
+  animation: checkinStepIn 0.35s var(--ease-fluid) both;
+}
+
+.checkin-question {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-dark);
+  margin-bottom: 18px;
+}
+
+.checkin-field {
+  margin-bottom: 16px;
+}
+
+.checkin-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-mid);
+  margin-bottom: 8px;
+  letter-spacing: 0.2px;
+}
+
+/* Slider */
+.checkin-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.checkin-slider {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--cream2) 0%, var(--terra-light) 100%);
+  outline: none;
+}
+
+.checkin-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: linear-gradient(155deg, #E08448, #C96B3A);
+  box-shadow: 0 2px 8px rgba(201, 107, 58, 0.35);
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.checkin-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+}
+
+.checkin-slider::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: linear-gradient(155deg, #E08448, #C96B3A);
+  box-shadow: 0 2px 8px rgba(201, 107, 58, 0.35);
+  cursor: pointer;
+  border: none;
+}
+
+.checkin-slider-value {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-weight: 800;
+  font-size: 20px;
+  color: var(--terra);
+  min-width: 40px;
+  text-align: right;
+}
+
+/* Rating buttons (1-5 scale) */
+.checkin-rating-row {
+  display: flex;
+  gap: 8px;
+}
+
+.checkin-rating-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 6px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-sm);
+  background: linear-gradient(160deg, #FFFFFF 0%, #FFFBF6 100%);
+  cursor: pointer;
+  transition: all 0.22s;
+}
+
+.checkin-rating-btn:hover {
+  border-color: rgba(201, 107, 58, 0.35);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(201, 107, 58, 0.12);
+}
+
+.checkin-rating-btn.active {
+  border-color: var(--terra);
+  background: linear-gradient(160deg, #FFF6EC 0%, #FFF0E2 100%);
+  box-shadow: 0 0 0 3px rgba(201, 107, 58, 0.10), 0 4px 12px rgba(201, 107, 58, 0.15);
+  transform: translateY(-2px);
+}
+
+.checkin-rating-emoji {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.checkin-rating-label {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-soft);
+}
+
+.checkin-rating-btn.active .checkin-rating-label {
+  color: var(--terra);
+  font-weight: 600;
+}
+
+/* Mood buttons */
+.checkin-mood-row {
+  display: flex;
+  gap: 8px;
+}
+
+.checkin-mood-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 6px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-sm);
+  background: linear-gradient(160deg, #FFFFFF 0%, #FFFBF6 100%);
+  cursor: pointer;
+  transition: all 0.22s;
+  font-family: 'Inter', sans-serif;
+  color: var(--text-mid);
+}
+
+.checkin-mood-btn:hover {
+  border-color: rgba(201, 107, 58, 0.3);
+  transform: translateY(-2px);
+}
+
+.checkin-mood-btn.active {
+  border-color: var(--terra);
+  background: linear-gradient(160deg, #FFF6EC 0%, #FFF0E2 100%);
+  box-shadow: 0 0 0 3px rgba(201, 107, 58, 0.10);
+  transform: translateY(-2px);
+}
+
+/* Toggle buttons */
+.checkin-toggle-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.checkin-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-sm);
+  background: linear-gradient(160deg, #FFFFFF 0%, #FFFBF6 100%);
+  cursor: pointer;
+  transition: all 0.22s;
+  text-align: left;
+  font-family: 'Inter', sans-serif;
+  color: var(--text-dark);
+  width: 100%;
+}
+
+.checkin-toggle-btn:hover {
+  border-color: rgba(201, 107, 58, 0.3);
+}
+
+.checkin-toggle-btn.active {
+  border-color: var(--sage);
+  background: linear-gradient(160deg, #F0F8F2 0%, #EDF5F0 100%);
+}
+
+.checkin-toggle-indicator {
+  margin-left: auto;
+  width: 40px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--cream2);
+  position: relative;
+  transition: background 0.3s;
+  flex-shrink: 0;
+}
+
+.checkin-toggle-indicator.on {
+  background: var(--sage);
+}
+
+.checkin-toggle-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: white;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  transition: transform 0.3s var(--ease-spring);
+}
+
+.checkin-toggle-indicator.on .checkin-toggle-thumb {
+  transform: translateX(18px);
+}
+
+/* Screen time buttons */
+.checkin-screen-row {
+  display: flex;
+  gap: 10px;
+}
+
+.checkin-screen-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 8px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-sm);
+  background: linear-gradient(160deg, #FFFFFF 0%, #FFFBF6 100%);
+  cursor: pointer;
+  transition: all 0.22s;
+  font-family: 'Inter', sans-serif;
+  color: var(--text-mid);
+}
+
+.checkin-screen-btn:hover {
+  border-color: rgba(201, 107, 58, 0.3);
+  transform: translateY(-2px);
+}
+
+.checkin-screen-btn.active {
+  border-color: var(--terra);
+  background: linear-gradient(160deg, #FFF6EC 0%, #FFF0E2 100%);
+  box-shadow: 0 0 0 3px rgba(201, 107, 58, 0.10);
+  transform: translateY(-2px);
+}
+
+/* Readiness ring */
+.checkin-readiness-ring {
+  position: relative;
+  display: inline-block;
+  margin-bottom: 4px;
+}
+
+.checkin-readiness-value {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -58%);
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-weight: 800;
+  font-size: 32px;
+  color: var(--text-dark);
+}
+
+.checkin-readiness-label {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, 50%);
+  font-size: 10px;
+  color: var(--text-soft);
+  font-weight: 500;
+}
+
+/* Footer */
+.checkin-footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.checkin-skip-text {
+  border: none;
+  background: none;
+  font-size: 12.5px;
+  color: var(--text-soft);
+  cursor: pointer;
+  padding: 6px 0;
+  font-family: 'Inter', sans-serif;
+  transition: color 0.2s;
+}
+
+.checkin-skip-text:hover {
+  color: var(--terra);
+}
+
+.checkin-footer-hint {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: var(--terra-light);
+  border-radius: var(--r-sm);
+  font-size: 11.5px;
+  color: var(--terra);
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+/* Planning badge for insights */
+.badge-plan {
+  background: linear-gradient(135deg, #E8F0FF 0%, #DDE8FA 100%);
+  color: var(--indigo);
+  border: 1px solid rgba(61, 79, 140, 0.15);
+}
+
+/* Checkin pending banner for insights page */
+.checkin-pending-banner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 20px;
+  background: linear-gradient(160deg, #FFF8F2 0%, #FFF2E6 100%);
+  border: 1.5px solid rgba(201, 107, 58, 0.18);
+  border-radius: var(--r-md);
+  margin-bottom: 20px;
+  animation: checkinStepIn 0.4s var(--ease-fluid) both;
+}
+
+.checkin-pending-banner-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--r-sm);
+  background: linear-gradient(160deg, #FFF0E2 0%, #FFE8D4 100%);
+  border: 1.5px solid rgba(201, 107, 58, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  flex-shrink: 0;
+}
+
+.checkin-pending-banner-content {
+  flex: 1;
+}
+
+.checkin-pending-banner-title {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--text-dark);
+  margin-bottom: 2px;
+}
+
+.checkin-pending-banner-sub {
+  font-size: 12.5px;
+  color: var(--text-soft);
+  line-height: 1.5;
+}
+
+.checkin-pending-banner-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: linear-gradient(160deg, var(--terra) 0%, #B85F32 100%);
+  color: white;
+  border: none;
+  border-radius: var(--r-sm);
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-weight: 600;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: all 0.22s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.checkin-pending-banner-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(201, 107, 58, 0.3);
 }

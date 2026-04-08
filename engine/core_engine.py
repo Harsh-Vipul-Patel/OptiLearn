@@ -1247,7 +1247,7 @@ class CognitiveAnalyticsEngine:
             'insights': insights,
         }
 
-    def generate_llm_insights_for_user(self, user_id: str) -> Dict[str, Any]:
+    def generate_llm_insights_for_user(self, user_id: str, wellness_context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         Full pipeline: statistical analysis → InsightExtractor → Gemini LLM.
 
@@ -1259,6 +1259,7 @@ class CognitiveAnalyticsEngine:
         - session_summary: aggregate stats (avg efficiency, duration, hours, streak)
         - subjects_studied: list of subject names the student works on
         - student_profile: target exam, preferred study time (if available)
+        - wellness_context: daily check-in data (sleep, energy, stress, mood, exercise, meal, screen time)
         """
         from llm_chain import get_insight_chain
 
@@ -1362,6 +1363,22 @@ class CognitiveAnalyticsEngine:
         except Exception as prof_err:
             logger.debug('Could not fetch student profile: %s', prof_err)
 
+        # ── Step 3c: Inject wellness context for planning-aware insights ──
+        if wellness_context:
+            readiness = self._compute_readiness_score(wellness_context)
+            insight_bundle['wellness_context'] = wellness_context
+            insight_bundle['readiness_score'] = readiness
+            logger.info(
+                'Wellness context for user %s: readiness=%d, sleep=%.1fh/q%d, energy=%d, stress=%d, mood=%s',
+                user_id,
+                readiness,
+                wellness_context.get('sleep_hours', 0),
+                wellness_context.get('sleep_quality', 0),
+                wellness_context.get('energy_level', 0),
+                wellness_context.get('stress_level', 0),
+                wellness_context.get('mood', 'N/A'),
+            )
+
         # Step 4: Call Gemini via LangChain/LangGraph
         chain = get_insight_chain()
         ai_insights = chain.generate_actionable_insights(
@@ -1415,6 +1432,47 @@ class CognitiveAnalyticsEngine:
                     profile['preferred_study_time'] = row['preferred_study_time']
                 break
         return profile
+
+    @staticmethod
+    def _compute_readiness_score(wellness: Dict[str, Any]) -> int:
+        """
+        Compute a 0-100 cognitive readiness score from wellness metrics.
+
+        Weighting based on neuroscience evidence:
+        - Sleep quality (25%): strongest predictor of working-memory performance
+        - Sleep duration (20%): normalized against 8h baseline
+        - Energy level (20%): subjective arousal correlates with executive function
+        - Stress level (15%): inverse — high cortisol impairs prefrontal function
+        - Exercise (8%): acute BDNF release improves focus
+        - Meal (5%): glucose stability for sustained attention
+        - Screen time (7%): blue-light displacement of sleep architecture
+        """
+        sleep_hours = float(wellness.get('sleep_hours', 7) or 7)
+        sleep_quality = int(wellness.get('sleep_quality', 3) or 3)
+        energy = int(wellness.get('energy_level', 3) or 3)
+        stress = int(wellness.get('stress_level', 2) or 2)
+        exercised = bool(wellness.get('exercised_today', False))
+        had_meal = bool(wellness.get('had_meal', False))
+        screen = str(wellness.get('screen_time_last_night', 'Moderate') or 'Moderate')
+
+        sleep_hours_norm = min(sleep_hours / 8.0, 1.0)
+        sleep_quality_norm = (sleep_quality - 1) / 4.0
+        energy_norm = (energy - 1) / 4.0
+        stress_norm = (stress - 1) / 4.0
+
+        screen_penalty = {'High': 0.07, 'Moderate': 0.02, 'Low': 0.0}.get(screen, 0.02)
+
+        raw = (
+            0.25 * sleep_quality_norm +
+            0.20 * sleep_hours_norm +
+            0.20 * energy_norm +
+            0.15 * (1.0 - stress_norm) +
+            (0.08 if exercised else 0) +
+            (0.05 if had_meal else 0) -
+            screen_penalty
+        )
+
+        return max(0, min(100, round(raw * 100)))
 
     def _generate_historical_recommendations(
         self,

@@ -1,13 +1,16 @@
 'use client'
 
+import { useState } from 'react'
 import { useSession } from '@/components/Providers'
 import { useStudyLogSync, useSuggestionsSync } from '@/hooks/useStudyLogSync'
 import { usePlans } from '@/hooks/usePlans'
+import { useCheckin } from '@/hooks/useCheckin'
 import { StatsRow } from '@/components/dashboard/StatsRow'
 import { GoalRingCard } from '@/components/dashboard/GoalRingCard'
 import { InsightCard } from '@/components/dashboard/InsightCard'
 import { TodayPlanCard } from '@/components/dashboard/TodayPlanCard'
 import { BurnoutMonitor } from '@/components/dashboard/BurnoutMonitor'
+import { DailyCheckinModal, ReadinessCard } from '@/components/dashboard/DailyCheckinModal'
 import { AnalyticsIcon, BookIcon, BrainIcon, SparklesIcon, TargetIcon } from '@/components/ui/AppIcons'
 import { formatPlanScheduleLabel, getPlanSortMinutes } from '@/lib/planTimeLabel'
 
@@ -45,7 +48,20 @@ export default function DashboardPage() {
   const typedSuggestions = suggestions as Suggestion[]
   const todayDate = new Date().toISOString().slice(0, 10)
   const { plans }       = usePlans(todayDate)
+  const { checkin, refreshCheckin, isLoading: checkinLoading } = useCheckin(session?.user?.id || '')
+  const [checkinDismissed, setCheckinDismissed] = useState(false)
 
+  // Show check-in modal when: user is logged in, no check-in today, not dismissed, not loading
+  const showCheckinModal = !checkinLoading && !checkin && !checkinDismissed && !!session?.user?.id
+
+  const handleCheckinComplete = () => {
+    setCheckinDismissed(true)
+    refreshCheckin()
+  }
+
+  const handleCheckinSkip = () => {
+    setCheckinDismissed(true)
+  }
 
 
   /* ── 1. Calculate Active Insights ── */
@@ -203,6 +219,11 @@ export default function DashboardPage() {
 
   return (
     <div style={{ animation: 'pageIn .4s cubic-bezier(.22,.68,0,1.1) both' }}>
+      {/* Daily Check-In Modal */}
+      {showCheckinModal && (
+        <DailyCheckinModal onComplete={handleCheckinComplete} onSkip={handleCheckinSkip} />
+      )}
+
       <div className="page-header">
         <div>
           <div className="page-title">
@@ -215,6 +236,12 @@ export default function DashboardPage() {
       </div>
 
       <StatsRow hoursToday={hoursToday} efficiency={avgEff} streak={streak} insightsToday={typedSuggestions.filter((s) => String(s.created_at).startsWith(todayDate)).length} />
+
+      {checkin && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr', maxWidth: 220, marginBottom: 18, marginTop: -4 }}>
+          <ReadinessCard checkin={checkin} />
+        </div>
+      )}
 
       <div className="dashboard-top-grid">
         <InsightCard text={insightText} burnoutRisk="Low" fatigue={insightFatigue} />

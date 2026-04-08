@@ -63,8 +63,21 @@ class AnalyzeRequest(BaseModel):
     topic_complexity: Optional[str] = None
 
 
+class WellnessContext(BaseModel):
+    sleep_hours: Optional[float] = None
+    sleep_quality: Optional[int] = None
+    energy_level: Optional[int] = None
+    stress_level: Optional[int] = None
+    mood: Optional[str] = None
+    exercised_today: Optional[bool] = None
+    had_meal: Optional[bool] = None
+    screen_time_last_night: Optional[str] = None
+    notes: Optional[str] = None
+
+
 class TodayInsightsRequest(BaseModel):
     user_id: str
+    wellness_context: Optional[WellnessContext] = None
 
 
 # ── Helpers ─────────────────────────────────────────────────────────
@@ -175,10 +188,13 @@ async def generate_today_insights(
     _verify_key(x_engine_key)
 
     try:
+        # Convert wellness context to dict if provided
+        wellness_dict = req.wellness_context.model_dump() if req.wellness_context else None
+
         # Use LLM-enhanced pipeline if GEMINI_API_KEY is available
         gemini_key = os.environ.get("GEMINI_API_KEY", "")
         if gemini_key:
-            summary = engine.generate_llm_insights_for_user(user_id=req.user_id)
+            summary = engine.generate_llm_insights_for_user(user_id=req.user_id, wellness_context=wellness_dict)
         else:
             summary = engine.generate_today_insights_for_user(user_id=req.user_id)
 
@@ -244,7 +260,8 @@ async def generate_ai_insights(
     _verify_key(x_engine_key)
 
     try:
-        summary = engine.generate_llm_insights_for_user(user_id=req.user_id)
+        wellness_dict = req.wellness_context.model_dump() if req.wellness_context else None
+        summary = engine.generate_llm_insights_for_user(user_id=req.user_id, wellness_context=wellness_dict)
 
         ai_insights = summary.get("ai_insights", [])
         all_recommendations: List[str] = []

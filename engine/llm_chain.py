@@ -71,7 +71,18 @@ Rules:
 11. Reference the student's SUBJECT or TOPIC when available — make it personal.
 12. If data quality is flagged as low, mention that more sessions are needed for accurate advice.
 13. Acknowledge the student's study streak or consistency if data shows it.
-14. When efficiency is declining, frame it as an opportunity, not a failure."""
+14. When efficiency is declining, frame it as an opportunity, not a failure.
+
+PLANNING & WELLNESS RULES:
+15. When wellness data is provided, at least 2 of your 5 insights MUST be PLANNING suggestions.
+16. Planning suggestions should adapt session duration, break frequency, subject ordering, and daily targets based on readiness.
+17. For low readiness (≤ 40), recommend shorter sessions (20-30 min), lighter review topics, more breaks, and realistic reduced targets.
+18. For moderate readiness (41-65), recommend balanced sessions (35-50 min) with standard breaks.
+19. For high readiness (≥ 66), encourage tackling challenging material with longer deep-work blocks (50-90 min).
+20. NEVER judge the student for low wellness scores. Frame low readiness as a strategic opportunity: "Today is ideal for light review and consolidation" not "You didn't sleep enough."
+21. When exercise is reported, acknowledge its cognitive benefits.
+22. When breakfast/meal is reported, connect it to sustained focus.
+23. Prefix planning insights with 📋 emoji."""
 
     # ── Validation thresholds ──────────────────────────────────────────────
     MIN_DATA_QUALITY = 0.3       # Below this → skip LLM, use fallback
@@ -381,6 +392,62 @@ Rules:
                 if iv.get("expected_improvement"):
                     prompt_parts.append(f"    Expected: {iv['expected_improvement']}")
 
+        # ── Wellness Context (from daily check-in) ──
+        wellness = insights.get("wellness_context", {})
+        readiness = insights.get("readiness_score")
+        if wellness:
+            wellness_parts = []
+            sleep_h = wellness.get('sleep_hours')
+            sleep_q = wellness.get('sleep_quality')
+            if sleep_h is not None:
+                sq_label = {1: 'terrible', 2: 'poor', 3: 'fair', 4: 'good', 5: 'excellent'}.get(sleep_q or 3, 'fair')
+                wellness_parts.append(f"Sleep: {sleep_h}h, quality: {sq_label} ({sleep_q}/5)")
+
+            energy = wellness.get('energy_level')
+            if energy:
+                e_label = {1: 'drained', 2: 'low', 3: 'okay', 4: 'good', 5: 'charged'}.get(energy, 'okay')
+                wellness_parts.append(f"Energy: {e_label} ({energy}/5)")
+
+            stress = wellness.get('stress_level')
+            if stress:
+                s_label = {1: 'calm', 2: 'mild', 3: 'moderate', 4: 'high', 5: 'extreme'}.get(stress, 'moderate')
+                wellness_parts.append(f"Stress: {s_label} ({stress}/5)")
+
+            mood = wellness.get('mood')
+            if mood:
+                wellness_parts.append(f"Mood: {mood}")
+
+            if wellness.get('exercised_today'):
+                wellness_parts.append("Exercised today: Yes (BDNF boost active)")
+            else:
+                wellness_parts.append("Exercised today: No")
+
+            if wellness.get('had_meal'):
+                wellness_parts.append("Had meal: Yes (glucose levels stable)")
+            else:
+                wellness_parts.append("Had meal: No (may affect sustained attention)")
+
+            screen = wellness.get('screen_time_last_night')
+            if screen:
+                wellness_parts.append(f"Screen time before bed: {screen}")
+
+            notes = wellness.get('notes')
+            if notes:
+                wellness_parts.append(f"Student notes: {notes}")
+
+            readiness_label = 'Recovery' if readiness and readiness < 35 else 'Moderate' if readiness and readiness < 55 else 'Good' if readiness and readiness < 75 else 'Excellent'
+            prompt_parts.append(
+                f"\n🫨 TODAY'S WELLNESS CHECK-IN (readiness score: {readiness or 'N/A'}/100 — {readiness_label}):"
+            )
+            for wp in wellness_parts:
+                prompt_parts.append(f"  • {wp}")
+            prompt_parts.append(
+                "\n📋 PLANNING INSTRUCTION: Based on the wellness data above, generate at least 2 PLANNING suggestions "
+                "that adapt today's study plan. Consider session duration, break timing, subject ordering "
+                "(lighter vs harder topics), and realistic daily targets. NEVER blame or judge the student "
+                "for their wellness state — frame everything as strategic adaptation."
+            )
+
         # ── Skill Insights ──
         skills = insights.get("skill_insights", {})
         if skills:
@@ -419,7 +486,9 @@ Rules:
                     f"{state['formatted_prompt']}\n\n"
                     "Remember: each insight must be specific, data-backed, and include "
                     "a concrete action the student can take this week. Reference their "
-                    "subjects and study patterns directly."
+                    "subjects and study patterns directly. If wellness data is provided, "
+                    "at least 2 insights must be 📋 PLANNING suggestions that adapt today's "
+                    "study plan to the student's current readiness level."
                 )),
             ]
             response = llm.invoke(messages)

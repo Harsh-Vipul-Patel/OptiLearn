@@ -3,7 +3,9 @@ import { getAuthUser } from '@/lib/auth/jwt'
 import { createClient } from '@/lib/supabase/server'
 
 import { InsightsService } from '@/services/insights.service'
+import { CheckinService } from '@/services/checkin.service'
 import { triggerTodayInsights, triggerAIInsights } from '@/lib/engineClient'
+import type { WellnessContext } from '@/lib/engineClient'
 
 export async function GET(request: Request) {
   try {
@@ -37,6 +39,35 @@ export async function POST(request: Request) {
     const userId = user.id
     console.log('[insights/POST] Generating insights for user:', userId)
 
+    // Fetch today's wellness check-in to pass as context to the engine
+    let wellnessContext: WellnessContext | undefined
+    try {
+      const checkin = await CheckinService.getTodayCheckin(userId)
+      if (checkin) {
+        wellnessContext = {
+          sleep_hours: checkin.sleep_hours,
+          sleep_quality: checkin.sleep_quality,
+          energy_level: checkin.energy_level,
+          stress_level: checkin.stress_level,
+          mood: checkin.mood,
+          exercised_today: checkin.exercised_today,
+          had_meal: checkin.had_meal,
+          screen_time_last_night: checkin.screen_time_last_night,
+          notes: checkin.notes,
+        }
+        console.log('[insights/POST] Wellness context found:', JSON.stringify({
+          sleep_hours: wellnessContext.sleep_hours,
+          sleep_quality: wellnessContext.sleep_quality,
+          energy_level: wellnessContext.energy_level,
+          mood: wellnessContext.mood,
+        }))
+      } else {
+        console.log('[insights/POST] No wellness check-in for today')
+      }
+    } catch (checkinErr) {
+      console.warn('[insights/POST] Could not fetch check-in:', checkinErr)
+    }
+
     let engineResult: {
       status?: string
       recommendations?: string[]
@@ -46,7 +77,7 @@ export async function POST(request: Request) {
     } = {}
 
     try {
-      engineResult = await triggerAIInsights({ user_id: userId })
+      engineResult = await triggerAIInsights({ user_id: userId, wellness_context: wellnessContext })
       console.log('[insights/POST] AI Engine response:', JSON.stringify({
         status: engineResult.status,
         processed_logs: engineResult.processed_logs,
@@ -57,7 +88,7 @@ export async function POST(request: Request) {
     } catch (aiErr) {
       console.warn('[insights/POST] AI endpoint failed, falling back:', aiErr)
       try {
-        engineResult = await triggerTodayInsights({ user_id: userId })
+        engineResult = await triggerTodayInsights({ user_id: userId, wellness_context: wellnessContext })
         console.log('[insights/POST] Fallback engine response:', JSON.stringify({
           status: engineResult.status,
           processed_logs: engineResult.processed_logs,

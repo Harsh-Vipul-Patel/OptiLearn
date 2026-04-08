@@ -16,8 +16,21 @@ export interface AnalyzePayload {
   topic_complexity: string;
 }
 
+export interface WellnessContext {
+  sleep_hours: number;
+  sleep_quality: number;
+  energy_level: number;
+  stress_level: number;
+  mood: string;
+  exercised_today: boolean;
+  had_meal: boolean;
+  screen_time_last_night: string;
+  notes?: string;
+}
+
 export interface TodayInsightsPayload {
   user_id: string;
+  wellness_context?: WellnessContext;
 }
 
 export async function triggerEngineAnalysis(payload: AnalyzePayload) {
@@ -58,4 +71,5 @@ export async function triggerAIInsights(payload: TodayInsightsPayload) {
   if (!res.ok) throw new Error(`Engine AI-insights error: ${res.status}`)
   return res.json()
 }
+
 
