@@ -44,3 +44,7 @@ next-env.d.ts
 
 #files
 poster.html
+.env.local
+
+#folder
+/ignore

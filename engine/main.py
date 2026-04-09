@@ -191,9 +191,9 @@ async def generate_today_insights(
         # Convert wellness context to dict if provided
         wellness_dict = req.wellness_context.model_dump() if req.wellness_context else None
 
-        # Use LLM-enhanced pipeline if GEMINI_API_KEY is available
-        gemini_key = os.environ.get("GEMINI_API_KEY", "")
-        if gemini_key:
+        # Use LLM-enhanced pipeline if GROQ_API_KEY is available
+        groq_key = os.environ.get("GROQ_API_KEY", "")
+        if groq_key:
             summary = engine.generate_llm_insights_for_user(user_id=req.user_id, wellness_context=wellness_dict)
         else:
             summary = engine.generate_today_insights_for_user(user_id=req.user_id)
@@ -255,7 +255,7 @@ async def generate_ai_insights(
 ):
     """
     Dedicated endpoint for LLM-powered insight generation.
-    Always uses Gemini → returns natural-language actionable insights.
+    Always uses Groq → returns natural-language actionable insights.
     """
     _verify_key(x_engine_key)
 

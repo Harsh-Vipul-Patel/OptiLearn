@@ -1303,7 +1303,7 @@ class CognitiveAnalyticsEngine:
 
     def generate_llm_insights_for_user(self, user_id: str, wellness_context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
-        Full pipeline: statistical analysis → InsightExtractor → Gemini LLM.
+        Full pipeline: statistical analysis → InsightExtractor → Groq LLM.
 
         Returns LLM-generated natural-language actionable insights alongside
         the original statistical summary. Falls back to rule-based recs if
@@ -1349,9 +1349,14 @@ class CognitiveAnalyticsEngine:
                 historical_sessions=historical_sessions[1:],
             )
 
+        # ── Step 3a: Pass raw sessions to ContextBuilder in llm_chain ──────
+        # ContextBuilder needs per-session granularity to compute subject×slot
+        # matrices, fatigue curves, and planning accuracy — averages are not enough.
+        insight_bundle['raw_sessions'] = historical_sessions
+
         # ── Step 3b: Enrich insight bundle with minimal important context ──
 
-        # Session summary: aggregate stats for Gemini context
+        # Session summary: aggregate stats for Groq context
         if historical_sessions:
             efficiencies = [
                 float(s.get('Efficiency', 0) or 0) for s in historical_sessions
@@ -1433,7 +1438,7 @@ class CognitiveAnalyticsEngine:
                 wellness_context.get('mood', 'N/A'),
             )
 
-        # Step 4: Call Gemini via LangChain/LangGraph
+        # Step 4: Call Groq via LangChain/LangGraph
         chain = get_insight_chain()
         ai_insights = chain.generate_actionable_insights(
             raw_insights=insight_bundle,
