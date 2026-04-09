@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Card } from '@/components/ui/Card'
 import { ReactNode, useMemo, useState } from 'react'
 import { ThumbsDownIcon, ThumbsUpIcon } from '@/components/ui/AppIcons'
+import { CheckCircleIcon, SparklesIcon } from '@/components/ui/AppIcons'
 import { DailyCheckinModal } from '@/components/dashboard/DailyCheckinModal'
 
 type SuggestionRow = {
@@ -44,6 +45,7 @@ export function InsightsPage() {
 
   // Check-in is pending when: not loading, no check-in found, user is logged in
   const checkinPending = !checkinLoading && !checkin && !!session?.user?.id
+  const checkinCompleted = !checkinLoading && !!checkin && !!session?.user?.id
 
   const normalized = useMemo(() => {
     return (suggestions as SuggestionRow[])
@@ -159,7 +161,9 @@ export function InsightsPage() {
       {/* Pending check-in banner */}
       {checkinPending && (
         <div className="checkin-pending-banner">
-          <div className="checkin-pending-banner-icon">🌅</div>
+          <div className="checkin-pending-banner-icon is-pending">
+            <SparklesIcon width={24} height={24} />
+          </div>
           <div className="checkin-pending-banner-content">
             <div className="checkin-pending-banner-title">Daily check-in pending</div>
             <div className="checkin-pending-banner-sub">
@@ -169,6 +173,21 @@ export function InsightsPage() {
           <button className="checkin-pending-banner-btn" onClick={() => setShowCheckinModal(true)}>
             Fill Check-in →
           </button>
+        </div>
+      )}
+
+      {/* Completed check-in banner */}
+      {checkinCompleted && (
+        <div className="checkin-pending-banner is-complete">
+          <div className="checkin-pending-banner-icon is-complete">
+            <CheckCircleIcon width={24} height={24} />
+          </div>
+          <div className="checkin-pending-banner-content">
+            <div className="checkin-pending-banner-title">Pre check-in filled</div>
+            <div className="checkin-pending-banner-sub">
+              Your daily check-in is complete. Insights generated now will use your current wellness context.
+            </div>
+          </div>
         </div>
       )}
 

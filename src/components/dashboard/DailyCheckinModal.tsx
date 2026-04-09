@@ -2,6 +2,18 @@
 
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
+import {
+  AlertIcon,
+  CheckCircleIcon,
+  FlameIcon,
+  FocusIcon,
+  LaptopIcon,
+  MoonIcon,
+  PhoneIcon,
+  SparklesIcon,
+  StarIcon,
+  TimerIcon,
+} from '@/components/ui/AppIcons'
 
 type CheckinFormData = {
   sleep_hours: number
@@ -19,18 +31,70 @@ const STEPS = ['sleep', 'readiness', 'lifestyle', 'done'] as const
 type Step = typeof STEPS[number]
 
 const MOOD_OPTIONS = [
-  { value: 'Great', emoji: '😄', label: 'Great' },
-  { value: 'Good', emoji: '🙂', label: 'Good' },
-  { value: 'Okay', emoji: '😐', label: 'Okay' },
-  { value: 'Low', emoji: '😔', label: 'Low' },
-  { value: 'Bad', emoji: '😢', label: 'Bad' },
-]
+  { value: 'Great', label: 'Great', level: 5 },
+  { value: 'Good', label: 'Good', level: 4 },
+  { value: 'Okay', label: 'Okay', level: 3 },
+  { value: 'Low', label: 'Low', level: 2 },
+  { value: 'Bad', label: 'Bad', level: 1 },
+] as const
 
 const SCREEN_TIME_OPTIONS = [
-  { value: 'Low', label: '< 1 hour', emoji: '📵' },
-  { value: 'Moderate', label: '1–3 hours', emoji: '📱' },
-  { value: 'High', label: '3+ hours', emoji: '🔥' },
-]
+  { value: 'Low', label: '< 1 hour' },
+  { value: 'Moderate', label: '1-3 hours' },
+  { value: 'High', label: '3+ hours' },
+] as const
+
+function MoodFaceIcon({ level, size = 22 }: { level: number; size?: number }) {
+  const mouthPath =
+    level >= 4
+      ? 'M8 15c1.2 1.3 2.4 2 4 2s2.8-.7 4-2'
+      : level === 3
+        ? 'M8.5 15h7'
+        : 'M8 17c1.2-1.3 2.4-2 4-2s2.8.7 4 2'
+
+  const eyes =
+    level <= 2
+      ? <path d="M8.4 10h1.2M14.4 10h1.2" />
+      : <><circle cx="9" cy="10" r="0.9" /><circle cx="15" cy="10" r="0.9" /></>
+
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" />
+      {eyes}
+      <path d={mouthPath} />
+    </svg>
+  )
+}
+
+function sleepIconFor(val: number) {
+  if (val <= 1) return <MoonIcon width={20} height={20} />
+  if (val === 2) return <AlertIcon width={20} height={20} />
+  if (val === 3) return <TimerIcon width={20} height={20} />
+  if (val === 4) return <SparklesIcon width={20} height={20} />
+  return <StarIcon width={20} height={20} />
+}
+
+function energyIconFor(val: number) {
+  if (val <= 1) return <MoonIcon width={20} height={20} />
+  if (val === 2) return <FocusIcon width={20} height={20} />
+  if (val === 3) return <TimerIcon width={20} height={20} />
+  if (val === 4) return <FlameIcon width={20} height={20} />
+  return <SparklesIcon width={20} height={20} />
+}
+
+function stressIconFor(val: number) {
+  if (val <= 1) return <CheckCircleIcon width={20} height={20} />
+  if (val === 2) return <FocusIcon width={20} height={20} />
+  if (val === 3) return <AlertIcon width={20} height={20} />
+  if (val === 4) return <FlameIcon width={20} height={20} />
+  return <AlertIcon width={20} height={20} />
+}
+
+function screenIconFor(value: 'Low' | 'Moderate' | 'High') {
+  if (value === 'Low') return <MoonIcon width={18} height={18} />
+  if (value === 'Moderate') return <PhoneIcon width={18} height={18} />
+  return <LaptopIcon width={18} height={18} />
+}
 
 function computeReadinessScore(data: CheckinFormData): number {
   const sleepHoursNorm = Math.min(data.sleep_hours / 8, 1)
@@ -125,7 +189,7 @@ export function DailyCheckinModal({
         {/* Header */}
         <div className="checkin-header">
           <div className="checkin-header-content">
-            <span style={{ fontSize: 28 }}>🌅</span>
+            <span className="checkin-header-icon"><SparklesIcon width={24} height={24} /></span>
             <div>
               <div className="checkin-header-title">
                 Good Morning!
@@ -184,9 +248,7 @@ export function DailyCheckinModal({
                       className={`checkin-rating-btn ${form.sleep_quality === val ? 'active' : ''}`}
                       onClick={() => setForm({ ...form, sleep_quality: val })}
                     >
-                      <span className="checkin-rating-emoji">
-                        {val === 1 ? '😴' : val === 2 ? '😑' : val === 3 ? '😐' : val === 4 ? '😊' : '🤩'}
-                      </span>
+                      <span className="checkin-rating-icon">{sleepIconFor(val)}</span>
                       <span className="checkin-rating-label">
                         {val === 1 ? 'Terrible' : val === 2 ? 'Poor' : val === 3 ? 'Fair' : val === 4 ? 'Good' : 'Great'}
                       </span>
@@ -210,9 +272,7 @@ export function DailyCheckinModal({
                       className={`checkin-rating-btn ${form.energy_level === val ? 'active' : ''}`}
                       onClick={() => setForm({ ...form, energy_level: val })}
                     >
-                      <span className="checkin-rating-emoji">
-                        {val === 1 ? '🪫' : val === 2 ? '😶' : val === 3 ? '🙂' : val === 4 ? '💪' : '⚡'}
-                      </span>
+                      <span className="checkin-rating-icon">{energyIconFor(val)}</span>
                       <span className="checkin-rating-label">
                         {val === 1 ? 'Drained' : val === 2 ? 'Low' : val === 3 ? 'Okay' : val === 4 ? 'Good' : 'Charged'}
                       </span>
@@ -230,9 +290,7 @@ export function DailyCheckinModal({
                       className={`checkin-rating-btn ${form.stress_level === val ? 'active' : ''}`}
                       onClick={() => setForm({ ...form, stress_level: val })}
                     >
-                      <span className="checkin-rating-emoji">
-                        {val === 1 ? '🧘' : val === 2 ? '😌' : val === 3 ? '😐' : val === 4 ? '😟' : '🤯'}
-                      </span>
+                      <span className="checkin-rating-icon">{stressIconFor(val)}</span>
                       <span className="checkin-rating-label">
                         {val === 1 ? 'Calm' : val === 2 ? 'Mild' : val === 3 ? 'Some' : val === 4 ? 'High' : 'Extreme'}
                       </span>
@@ -250,7 +308,7 @@ export function DailyCheckinModal({
                       className={`checkin-mood-btn ${form.mood === opt.value ? 'active' : ''}`}
                       onClick={() => setForm({ ...form, mood: opt.value })}
                     >
-                      <span style={{ fontSize: 22 }}>{opt.emoji}</span>
+                      <span className="checkin-mood-icon"><MoodFaceIcon level={opt.level} size={22} /></span>
                       <span style={{ fontSize: 10.5 }}>{opt.label}</span>
                     </button>
                   ))}
@@ -268,7 +326,7 @@ export function DailyCheckinModal({
                   className={`checkin-toggle-btn ${form.exercised_today ? 'active' : ''}`}
                   onClick={() => setForm({ ...form, exercised_today: !form.exercised_today })}
                 >
-                  <span style={{ fontSize: 20 }}>🏃</span>
+                  <span className="checkin-toggle-icon"><FlameIcon width={18} height={18} /></span>
                   <div>
                     <div style={{ fontWeight: 600, fontSize: 13 }}>
                       {form.exercised_today ? 'Yes, I exercised!' : 'Did you exercise today?'}
@@ -284,7 +342,7 @@ export function DailyCheckinModal({
                   className={`checkin-toggle-btn ${form.had_meal ? 'active' : ''}`}
                   onClick={() => setForm({ ...form, had_meal: !form.had_meal })}
                 >
-                  <span style={{ fontSize: 20 }}>🍳</span>
+                  <span className="checkin-toggle-icon"><StarIcon width={18} height={18} /></span>
                   <div>
                     <div style={{ fontWeight: 600, fontSize: 13 }}>
                       {form.had_meal ? 'Yes, I ate!' : 'Had breakfast/meal?'}
@@ -306,7 +364,7 @@ export function DailyCheckinModal({
                       className={`checkin-screen-btn ${form.screen_time_last_night === opt.value ? 'active' : ''}`}
                       onClick={() => setForm({ ...form, screen_time_last_night: opt.value })}
                     >
-                      <span style={{ fontSize: 18 }}>{opt.emoji}</span>
+                      <span className="checkin-screen-icon">{screenIconFor(opt.value)}</span>
                       <span style={{ fontWeight: 600, fontSize: 12.5 }}>{opt.value}</span>
                       <span style={{ fontSize: 10.5, color: 'var(--text-soft)' }}>{opt.label}</span>
                     </button>

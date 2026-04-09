@@ -3248,6 +3248,18 @@ textarea,
   gap: 12px;
 }
 
+.checkin-header-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid rgba(201, 107, 58, 0.22);
+  background: linear-gradient(165deg, #FFF6EC 0%, #FFF0E2 100%);
+  color: var(--terra);
+}
+
 .checkin-header-title {
   font-family: 'Plus Jakarta Sans', sans-serif;
   font-weight: 800;
@@ -3303,6 +3315,10 @@ textarea,
 
 .checkin-step {
   animation: checkinStepIn 0.35s var(--ease-fluid) both;
+}
+
+.checkin-icon-muted {
+  filter: grayscale(1) saturate(0);
 }
 
 .checkin-question {
@@ -3416,6 +3432,20 @@ textarea,
   line-height: 1;
 }
 
+.checkin-rating-icon {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-mid);
+}
+
+.checkin-rating-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
 .checkin-rating-label {
   font-size: 10px;
   font-weight: 500;
@@ -3425,6 +3455,10 @@ textarea,
 .checkin-rating-btn.active .checkin-rating-label {
   color: var(--terra);
   font-weight: 600;
+}
+
+.checkin-rating-btn.active .checkin-rating-icon {
+  color: var(--terra);
 }
 
 /* Mood buttons */
@@ -3449,6 +3483,15 @@ textarea,
   color: var(--text-mid);
 }
 
+.checkin-mood-icon {
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-mid);
+}
+
 .checkin-mood-btn:hover {
   border-color: rgba(201, 107, 58, 0.3);
   transform: translateY(-2px);
@@ -3459,6 +3502,10 @@ textarea,
   background: linear-gradient(160deg, #FFF6EC 0%, #FFF0E2 100%);
   box-shadow: 0 0 0 3px rgba(201, 107, 58, 0.10);
   transform: translateY(-2px);
+}
+
+.checkin-mood-btn.active .checkin-mood-icon {
+  color: var(--terra);
 }
 
 /* Toggle buttons */
@@ -3483,6 +3530,19 @@ textarea,
   font-family: 'Inter', sans-serif;
   color: var(--text-dark);
   width: 100%;
+}
+
+.checkin-toggle-icon {
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-mid);
+}
+
+.checkin-toggle-btn.active .checkin-toggle-icon {
+  color: var(--sage);
 }
 
 .checkin-toggle-btn:hover {
@@ -3547,6 +3607,15 @@ textarea,
   color: var(--text-mid);
 }
 
+.checkin-screen-icon {
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-mid);
+}
+
 .checkin-screen-btn:hover {
   border-color: rgba(201, 107, 58, 0.3);
   transform: translateY(-2px);
@@ -3557,6 +3626,10 @@ textarea,
   background: linear-gradient(160deg, #FFF6EC 0%, #FFF0E2 100%);
   box-shadow: 0 0 0 3px rgba(201, 107, 58, 0.10);
   transform: translateY(-2px);
+}
+
+.checkin-screen-btn.active .checkin-screen-icon {
+  color: var(--terra);
 }
 
 /* Readiness ring */
@@ -3646,6 +3719,11 @@ textarea,
   animation: checkinStepIn 0.4s var(--ease-fluid) both;
 }
 
+.checkin-pending-banner.is-complete {
+  background: linear-gradient(160deg, #F1FAF4 0%, #E8F6ED 100%);
+  border-color: rgba(74, 143, 101, 0.24);
+}
+
 .checkin-pending-banner-icon {
   width: 44px;
   height: 44px;
@@ -3655,8 +3733,17 @@ textarea,
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 22px;
   flex-shrink: 0;
+}
+
+.checkin-pending-banner-icon.is-pending {
+  color: var(--terra);
+}
+
+.checkin-pending-banner-icon.is-complete {
+  background: linear-gradient(160deg, #E4F3E9 0%, #D8EEDB 100%);
+  border-color: rgba(74, 143, 101, 0.2);
+  color: var(--sage);
 }
 
 .checkin-pending-banner-content {
