@@ -15,9 +15,19 @@ interface GoalRingCardProps {
   hoursStudied: number
   goalHours: number
   subjects: SubjectProgress[]
+  readinessScore?: number | null
+  readinessLabel?: string
+  readinessColor?: string
 }
 
-export function GoalRingCard({ hoursStudied, goalHours, subjects }: GoalRingCardProps) {
+export function GoalRingCard({
+  hoursStudied,
+  goalHours,
+  subjects,
+  readinessScore,
+  readinessLabel,
+  readinessColor,
+}: GoalRingCardProps) {
   const ringRef = useRef<SVGCircleElement>(null)
   const pct = Math.min(hoursStudied / goalHours, 1)
   const circ = 2 * Math.PI * 64
@@ -35,7 +45,30 @@ export function GoalRingCard({ hoursStudied, goalHours, subjects }: GoalRingCard
 
   return (
     <div className="card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, padding: '22px 18px' }}>
-      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-soft)', letterSpacing: '.6px' }}>TODAY&apos;S GOAL</div>
+      <div style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-soft)', letterSpacing: '.6px' }}>TODAY&apos;S GOAL</div>
+        {typeof readinessScore === 'number' && readinessLabel ? (
+          <div
+            style={{
+              fontSize: 10.5,
+              fontWeight: 700,
+              color: readinessColor || 'var(--text-main)',
+              background: `${readinessColor || '#4A5FA0'}14`,
+              border: `1px solid ${readinessColor || '#4A5FA0'}35`,
+              borderRadius: 999,
+              padding: '4px 8px',
+              lineHeight: 1,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+            }}
+            aria-label={`Readiness score ${readinessScore}`}
+            title={`Readiness ${readinessScore} (${readinessLabel})`}
+          >
+            <span>Readiness {readinessScore}</span>
+          </div>
+        ) : null}
+      </div>
       <div className="ring-wrap">
         <svg className="ring-svg" viewBox="0 0 156 156">
           <circle className="ring-track" cx="78" cy="78" r="64" />

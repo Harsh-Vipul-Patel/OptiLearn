@@ -10,7 +10,7 @@ import { GoalRingCard } from '@/components/dashboard/GoalRingCard'
 import { InsightCard } from '@/components/dashboard/InsightCard'
 import { TodayPlanCard } from '@/components/dashboard/TodayPlanCard'
 import { BurnoutMonitor } from '@/components/dashboard/BurnoutMonitor'
-import { DailyCheckinModal, ReadinessCard } from '@/components/dashboard/DailyCheckinModal'
+import { DailyCheckinModal } from '@/components/dashboard/DailyCheckinModal'
 import { AnalyticsIcon, BookIcon, BrainIcon, SparklesIcon, TargetIcon } from '@/components/ui/AppIcons'
 import { formatPlanScheduleLabel, getPlanSortMinutes } from '@/lib/planTimeLabel'
 
@@ -38,6 +38,42 @@ const parseEfficiencyPercent = (value: unknown): number | null => {
   if (!Number.isFinite(numeric) || numeric < 0) return null
 
   return numeric <= 1 ? clampPercent(numeric * 100) : clampPercent(numeric)
+}
+
+const computeReadinessScore = (checkin: {
+  sleep_hours: number
+  sleep_quality: number
+  energy_level: number
+  stress_level: number
+  exercised_today: boolean
+  had_meal: boolean
+  screen_time_last_night: string
+}): number => {
+  const sleepHoursNorm = Math.min(checkin.sleep_hours / 8, 1)
+  const sleepQualityNorm = (checkin.sleep_quality - 1) / 4
+  const energyNorm = (checkin.energy_level - 1) / 4
+  const stressNorm = (checkin.stress_level - 1) / 4
+  const exerciseBoost = checkin.exercised_today ? 0.08 : 0
+  const mealBoost = checkin.had_meal ? 0.05 : 0
+  const screenPenalty = checkin.screen_time_last_night === 'High' ? 0.06 : checkin.screen_time_last_night === 'Moderate' ? 0.02 : 0
+
+  const raw =
+    0.25 * sleepQualityNorm +
+    0.20 * sleepHoursNorm +
+    0.20 * energyNorm +
+    0.15 * (1 - stressNorm) +
+    exerciseBoost +
+    mealBoost -
+    screenPenalty
+
+  return Math.min(100, Math.max(0, Math.round(raw * 100)))
+}
+
+const getReadinessLabel = (score: number): { label: string; color: string } => {
+  if (score >= 75) return { label: 'Excellent', color: 'var(--sage)' }
+  if (score >= 55) return { label: 'Good', color: 'var(--indigo)' }
+  if (score >= 35) return { label: 'Moderate', color: 'var(--gold)' }
+  return { label: 'Recovery', color: 'var(--terra)' }
 }
 
 export default function DashboardPage() {
@@ -217,6 +253,9 @@ export default function DashboardPage() {
     d.setDate(d.getDate() - 1)
   }
 
+  const readinessScore = checkin ? computeReadinessScore(checkin) : null
+  const readinessInfo = readinessScore !== null ? getReadinessLabel(readinessScore) : null
+
   return (
     <div style={{ animation: 'pageIn .4s cubic-bezier(.22,.68,0,1.1) both' }}>
       {/* Daily Check-In Modal */}
@@ -237,15 +276,16 @@ export default function DashboardPage() {
 
       <StatsRow hoursToday={hoursToday} efficiency={avgEff} streak={streak} insightsToday={typedSuggestions.filter((s) => String(s.created_at).startsWith(todayDate)).length} />
 
-      {checkin && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr', maxWidth: 220, marginBottom: 18, marginTop: -4 }}>
-          <ReadinessCard checkin={checkin} />
-        </div>
-      )}
-
       <div className="dashboard-top-grid">
         <InsightCard text={insightText} burnoutRisk="Low" fatigue={insightFatigue} />
-        <GoalRingCard hoursStudied={Number(hoursTodayNum.toFixed(1))} goalHours={8} subjects={RING_SUBJECTS} />
+        <GoalRingCard
+          hoursStudied={Number(hoursTodayNum.toFixed(1))}
+          goalHours={8}
+          subjects={RING_SUBJECTS}
+          readinessScore={readinessScore}
+          readinessLabel={readinessInfo?.label}
+          readinessColor={readinessInfo?.color}
+        />
       </div>
 
       <div className="grid-2">
