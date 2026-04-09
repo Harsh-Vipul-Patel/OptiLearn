@@ -110,6 +110,7 @@ Schema for each object:
                 google_api_key=self.api_key,
                 temperature=0.3, # Low temp for precise analytical answers
                 max_output_tokens=1024,
+                max_retries=0, # Disable LangChain's default 10x retry loop to prevent quota lockout
             )
         return self._llm
 
@@ -454,6 +455,12 @@ Schema for each object:
                 prompt_parts.append("Cognitive skill changes: " + ", ".join(skill_parts))
 
         formatted = "\n".join(prompt_parts)
+        
+        # Guard rail: Strict token management to avoid 429 payload limit. 
+        # Roughly 2200 characters = ~550 tokens. Keeps context far under the quota limit.
+        if len(formatted) > 2200:
+            formatted = formatted[:2200] + "\n...[CONTEXT TRUNCATED TO MANAGE API QUOTA]"
+            
         state["formatted_prompt"] = formatted
         return state
 
