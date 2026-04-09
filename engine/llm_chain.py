@@ -52,26 +52,27 @@ class GeminiInsightChain:
     and useful before spending LLM tokens.
     """
 
-    SYSTEM_PROMPT = """You are a study coach analyzing a student's planned vs actual study logs.
+    SYSTEM_PROMPT = """You are an elite study coach analyzing a student's planned vs actual study.
 
-Your task: Produce exactly 6 insights based on the provided stats and wellness data.
+Your task: Produce exactly 3 highly actionable insights based on the provided stats and wellness data.
 Each insight must:
 1. Cite a SPECIFIC NUMBER from the data (percentage, count, or ratio)
 2. Explain WHY this pattern matters for the student
-3. Give ONE concrete action starting tomorrow — not generic advice
+3. Provide ONE highly concrete, mechanical action they can take.
 
-Analyze across these dimensions (pick the 6 most data-rich):
-- CONSISTENCY: Are they showing up? (e.g. "studied 5/7 planned days", "skip rate on Sundays is 80%")
-- PLANNING_ACCURACY: Are plans realistic? (e.g. "complete only 58% of planned time on average")
-- TIMING: When do they perform best? (e.g. "morning efficiency 42% vs evening 87%")
-- SUBJECT: Which subjects are avoided? (e.g. "Chemistry skipped 4/6 times this week")
-- PROCRASTINATION: Where do plans break? (e.g. "first session of day skipped 60% of the time")
-- BURNOUT: Overloaded days? (e.g. "days with >4 hrs planned complete only 35%")
-- MOMENTUM: Does starting a session predict finishing the day? 
-- RECOVERY: How do they bounce back after missed days?
-- FOCUS_DURATION: What session length completes most reliably?
-- TREND: Are things improving or declining week-over-week?
-- PLANNING: If wellness data is provided, adapt to their readiness level.
+IMPORTANT ACTION RULE:
+The "action" must NOT simply rephrase the problem (e.g. if problem is phone distraction, do NOT say "Stop using phone").
+The "action" MUST provide a concrete, mechanical step (e.g. "Put your phone in another room or use a website blocker app for the first 25 mins").
+
+Analyze across the most relevant of these dimensions (pick the 3 most data-rich and actionable):
+- CONSISTENCY (e.g. "skip rate on Sundays is 80%")
+- PLANNING_ACCURACY (e.g. "complete only 58% of planned time")
+- TIMING (e.g. "morning efficiency 42% vs evening 87%")
+- SUBJECT (e.g. "Chemistry skipped 4/6 times this week")
+- PROCRASTINATION (e.g. "first session of day skipped 60% of the time")
+- BURNOUT (e.g. "days with >4 hrs planned complete only 35%")
+- TREND (e.g. efficiency dropped 15% week-over-week)
+- PLANNING (If wellness data is provided, adapt to readiness)
 
 Return ONLY a JSON array. No markdown. No explanation. No preamble.
 
@@ -79,9 +80,9 @@ Schema for each object:
 [
   {
     "type": "<one of the dimension names above>",
-    "title": "<specific finding in max 12 words, must include a number>",
-    "finding": "<2 sentences: what the data shows + why it matters>",
-    "action": "<1 sentence: exact thing to do tomorrow or this week>",
+    "title": "<specific finding in max 10 words, must include a number>",
+    "finding": "<1-2 sentences: what the data shows + why it matters>",
+    "action": "<1-2 sentences: highly specific, mechanical step to execute tomorrow>",
     "priority": <1-3 where 1=most urgent>
   }
 ]"""
@@ -316,12 +317,10 @@ Schema for each object:
             priority = dist.get("intervention_priority", "low")
             prompt_parts.append(f"Distraction intervention priority: {priority}")
             patterns = dist.get("patterns", {})
-            for name, data in patterns.items():
+            for name, data in list(patterns.items())[:2]:  # Limit to top 2 to conserve tokens
                 prompt_parts.append(
                     f"  - {name}: occurs {data.get('frequency', 0)} times, "
-                    f"avg efficiency when present = {data.get('avg_efficiency_when_present', 0):.0f}%, "
-                    f"concentrated in {data.get('primary_timeslot', 'N/A')} "
-                    f"({data.get('timeslot_concentration', 0) * 100:.0f}%)"
+                    f"avg efficiency when present = {data.get('avg_efficiency_when_present', 0):.0f}%"
                 )
         elif dist.get("current_distractions"):
             prompt_parts.append(
@@ -382,17 +381,14 @@ Schema for each object:
             if traj.get("urgency") == "high":
                 prompt_parts.append("⚠️ URGENCY: Rapid change detected — immediate intervention recommended.")
 
-        # ── Intervention Vectors (from InsightExtractor) ──
         interventions = insights.get("recommended_interventions", [])
         if interventions:
             prompt_parts.append("Pre-computed intervention vectors:")
-            for iv in interventions[:5]:
+            for iv in interventions[:3]:  # Limit to top 3 to conserve tokens
                 prompt_parts.append(
                     f"  [{iv.get('priority', 'medium').upper()}] {iv.get('problem', '')} → "
                     f"Action: {iv.get('solution_vector', '')}"
                 )
-                if iv.get("expected_improvement"):
-                    prompt_parts.append(f"    Expected: {iv['expected_improvement']}")
 
         # ── Wellness Context (from daily check-in) ──
         wellness = insights.get("wellness_context", {})
@@ -444,21 +440,18 @@ Schema for each object:
             for wp in wellness_parts:
                 prompt_parts.append(f"  • {wp}")
             prompt_parts.append(
-                "\n📋 PLANNING INSTRUCTION: Based on the wellness data above, generate at least 2 PLANNING suggestions "
-                "that adapt today's study plan. Consider session duration, break timing, subject ordering "
-                "(lighter vs harder topics), and realistic daily targets. NEVER blame or judge the student "
-                "for their wellness state — frame everything as strategic adaptation."
+                "\n📋 PLANNING INSTRUCTION: Generate at least 1 highly mechanical PLANNING suggestion based on wellness. "
+                "NEVER blame or judge the student — frame everything as strategic adaptation."
             )
 
         # ── Skill Insights ──
         skills = insights.get("skill_insights", {})
         if skills:
-            prompt_parts.append("Cognitive skill changes:")
-            for skill_id, data in skills.items():
-                prompt_parts.append(
-                    f"  - {data.get('skill_name', skill_id)}: "
-                    f"{data.get('status', 'stable')}, change = {data.get('change', 0):.0f}%"
-                )
+            skill_parts = []
+            for skill_id, data in list(skills.items())[:3]:  # Limit to 3 to conserve tokens
+                skill_parts.append(f"{data.get('skill_name', skill_id)} (change {data.get('change', 0):.0f}%)")
+            if skill_parts:
+                prompt_parts.append("Cognitive skill changes: " + ", ".join(skill_parts))
 
         formatted = "\n".join(prompt_parts)
         state["formatted_prompt"] = formatted
@@ -483,14 +476,11 @@ Schema for each object:
             messages = [
                 SystemMessage(content=self.SYSTEM_PROMPT),
                 HumanMessage(content=(
-                    "Based on the following study analytics data, generate 5 personalized, "
-                    "actionable insights for this student:\n\n"
+                    "Based on the following study analytics data, generate exactly 3 personalized, "
+                    "highly actionable insights for this student:\n\n"
                     f"{state['formatted_prompt']}\n\n"
-                    "Remember: each insight must be specific, data-backed, and include "
-                    "a concrete action the student can take this week. Reference their "
-                    "subjects and study patterns directly. If wellness data is provided, "
-                    "at least 2 insights must be 📋 PLANNING suggestions that adapt today's "
-                    "study plan to the student's current readiness level."
+                    "Remember: Do NOT just rephrase the problem. The action MUST be a mechanical, specific step. "
+                    "If wellness data is provided, at least 1 insight must be a 📋 PLANNING suggestion adapting to their readiness."
                 )),
             ]
             response = llm.invoke(messages)
