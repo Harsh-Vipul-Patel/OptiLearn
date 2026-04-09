@@ -52,37 +52,39 @@ class GeminiInsightChain:
     and useful before spending LLM tokens.
     """
 
-    SYSTEM_PROMPT = """You are OptiLearn AI Coach — a supportive, data-driven study advisor.
+    SYSTEM_PROMPT = """You are a study coach analyzing a student's planned vs actual study logs.
 
-Your role is to translate statistical study patterns into clear, actionable advice
-that a student can immediately apply. You are empathetic, encouraging, and specific.
+Your task: Produce exactly 6 insights based on the provided stats and wellness data.
+Each insight must:
+1. Cite a SPECIFIC NUMBER from the data (percentage, count, or ratio)
+2. Explain WHY this pattern matters for the student
+3. Give ONE concrete action starting tomorrow — not generic advice
 
-Rules:
-1. Base EVERY recommendation on the data provided — never invent statistics.
-2. Use second person ("you") and a warm coaching tone.
-3. Each insight must include a SPECIFIC ACTION the student can take THIS WEEK.
-4. Prioritize the most impactful changes first.
-5. Acknowledge progress and strengths, not just weaknesses.
-6. Keep each insight to 1-2 concise sentences.
-7. Use emojis sparingly for visual distinction (one per insight max).
-8. Return EXACTLY 5 insights, each on a new line, prefixed with a relevant emoji.
-9. Do NOT use bullet points or numbered lists — just emoji-prefixed lines.
-10. If data is insufficient, give general evidence-based study advice.
-11. Reference the student's SUBJECT or TOPIC when available — make it personal.
-12. If data quality is flagged as low, mention that more sessions are needed for accurate advice.
-13. Acknowledge the student's study streak or consistency if data shows it.
-14. When efficiency is declining, frame it as an opportunity, not a failure.
+Analyze across these dimensions (pick the 6 most data-rich):
+- CONSISTENCY: Are they showing up? (e.g. "studied 5/7 planned days", "skip rate on Sundays is 80%")
+- PLANNING_ACCURACY: Are plans realistic? (e.g. "complete only 58% of planned time on average")
+- TIMING: When do they perform best? (e.g. "morning efficiency 42% vs evening 87%")
+- SUBJECT: Which subjects are avoided? (e.g. "Chemistry skipped 4/6 times this week")
+- PROCRASTINATION: Where do plans break? (e.g. "first session of day skipped 60% of the time")
+- BURNOUT: Overloaded days? (e.g. "days with >4 hrs planned complete only 35%")
+- MOMENTUM: Does starting a session predict finishing the day? 
+- RECOVERY: How do they bounce back after missed days?
+- FOCUS_DURATION: What session length completes most reliably?
+- TREND: Are things improving or declining week-over-week?
+- PLANNING: If wellness data is provided, adapt to their readiness level.
 
-PLANNING & WELLNESS RULES:
-15. When wellness data is provided, at least 2 of your 5 insights MUST be PLANNING suggestions.
-16. Planning suggestions should adapt session duration, break frequency, subject ordering, and daily targets based on readiness.
-17. For low readiness (≤ 40), recommend shorter sessions (20-30 min), lighter review topics, more breaks, and realistic reduced targets.
-18. For moderate readiness (41-65), recommend balanced sessions (35-50 min) with standard breaks.
-19. For high readiness (≥ 66), encourage tackling challenging material with longer deep-work blocks (50-90 min).
-20. NEVER judge the student for low wellness scores. Frame low readiness as a strategic opportunity: "Today is ideal for light review and consolidation" not "You didn't sleep enough."
-21. When exercise is reported, acknowledge its cognitive benefits.
-22. When breakfast/meal is reported, connect it to sustained focus.
-23. Prefix planning insights with 📋 emoji."""
+Return ONLY a JSON array. No markdown. No explanation. No preamble.
+
+Schema for each object:
+[
+  {
+    "type": "<one of the dimension names above>",
+    "title": "<specific finding in max 12 words, must include a number>",
+    "finding": "<2 sentences: what the data shows + why it matters>",
+    "action": "<1 sentence: exact thing to do tomorrow or this week>",
+    "priority": <1-3 where 1=most urgent>
+  }
+]"""
 
     # ── Validation thresholds ──────────────────────────────────────────────
     MIN_DATA_QUALITY = 0.3       # Below this → skip LLM, use fallback
@@ -105,7 +107,7 @@ PLANNING & WELLNESS RULES:
             self._llm = ChatGoogleGenerativeAI(
                 model=self.model_name,
                 google_api_key=self.api_key,
-                temperature=0.7,
+                temperature=0.3, # Low temp for precise analytical answers
                 max_output_tokens=1024,
             )
         return self._llm
@@ -500,21 +502,40 @@ PLANNING & WELLNESS RULES:
         return state
 
     def _parse_response(self, state: InsightState) -> InsightState:
-        """Node 3: Parse LLM response into a clean list of actionable insights."""
+        """Node 3: Parse LLM JSON array response into strings for database compatibility."""
+        import re
+        import json
+        
         raw = state.get("llm_response", "")
 
         if not raw or state.get("error"):
             state["actionable_insights"] = []
             return state
 
-        # Split by newlines and clean up
-        lines = [line.strip() for line in raw.strip().split("\n") if line.strip()]
-
-        # Filter out empty or very short lines (headers, etc.)
-        insights = [line for line in lines if len(line) > 15]
-
-        # Cap at 7 insights
-        state["actionable_insights"] = insights[:7]
+        try:
+            # Strip accidental markdown fences
+            clean_raw = re.sub(r"```(json)?|```", "", raw).strip()
+            
+            insights = json.loads(clean_raw)
+            
+            if isinstance(insights, list):
+                # Sort by priority so urgent ones surface first
+                insights.sort(key=lambda x: x.get("priority", 3))
+                
+                final_recs = []
+                for item in insights[:6]:
+                    # Keep as JSON string so frontend can decode the rich object
+                    final_recs.append(json.dumps(item))
+                
+                state["actionable_insights"] = final_recs
+            else:
+                logger.error("LLM did not return a JSON array")
+                state["actionable_insights"] = []
+                
+        except json.JSONDecodeError as exc:
+            logger.error("Failed to parse JSON from LLM: %s\nRaw: %s", exc, raw)
+            state["actionable_insights"] = []
+            
         return state
 
     # ── Build LangGraph ────────────────────────────────────────────────────

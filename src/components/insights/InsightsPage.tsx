@@ -51,12 +51,38 @@ export function InsightsPage() {
     return (suggestions as SuggestionRow[])
       .map((item) => {
         const id = item.id ?? item.suggestion_id
-        const text = item.suggestion_text?.trim() || ''
-        const isPlan = text.startsWith('📋') || (item.suggestion_type || '').toLowerCase().includes('plan')
+        const rawText = item.suggestion_text?.trim() || ''
+        let text = rawText
+        let type = item.suggestion_type || 'General'
+        let title = ''
+        let finding = ''
+        let action = ''
+        let isPlan = false
+        
+        try {
+          const obj = JSON.parse(rawText)
+          if (obj.action || obj.finding) {
+            type = obj.type || type
+            title = obj.title || ''
+            finding = obj.finding || ''
+            action = obj.action || ''
+            isPlan = type.toLowerCase() === 'planning' || rawText.includes('📋')
+            text = action || finding || rawText
+          } else {
+             isPlan = rawText.startsWith('📋') || type.toLowerCase().includes('plan')
+          }
+        } catch {
+          isPlan = rawText.startsWith('📋') || type.toLowerCase().includes('plan')
+        }
+
         return {
           id,
           text,
-          type: isPlan ? '📋 Plan' : (item.suggestion_type || 'General'),
+          rawText,
+          type: isPlan ? '📋 Plan' : type,
+          title,
+          finding,
+          action,
           isPlan,
           created_at: item.created_at,
         }
@@ -193,8 +219,11 @@ export function InsightsPage() {
 
       <div className="grid-2" style={{ marginBottom: 20 }}>
         <div className="insight-card">
-          <div className="insight-label">Today&apos;s Top Insight</div>
-          <div className="insight-text">&quot;{topText}&quot;</div>
+          <div className="insight-label">Today&apos;s Top Insight {top?.title ? `— ${top.title}` : ''}</div>
+          <div className="insight-text">
+            {top?.finding && <div style={{marginBottom: 8, fontSize: '14px'}}>{top.finding}</div>}
+            {top?.action ? <div style={{fontWeight: 600, color: 'var(--indigo)'}}>👉 {top.action}</div> : <div>&quot;{topText}&quot;</div>}
+          </div>
           <div className="insight-actions">
             <button className="insight-btn insight-btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={() => onFeedback(top?.id, 'like')}><ThumbsUpIcon width={16} height={16} />Helpful</button>
             <button className="insight-btn insight-btn-ghost" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={() => onFeedback(top?.id, 'dislike')}><ThumbsDownIcon width={16} height={16} />Not now</button>
@@ -208,7 +237,7 @@ export function InsightsPage() {
                 icon={index === 0 ? <TimerIcon /> : <SwapIcon />}
                 title={item.type}
                 color={index === 0 ? 'var(--terra)' : 'var(--gold)'}
-                text={item.text}
+                item={item}
                 onLike={() => onFeedback(item.id, 'like')}
                 onDislike={() => onFeedback(item.id, 'dislike')}
               />
@@ -218,7 +247,7 @@ export function InsightsPage() {
               icon={<TimerIcon />}
               title="Awaiting Insights"
               color="var(--terra)"
-              text="Generate your first recommendation by logging a completed study session."
+              item={{ text: "Generate your first recommendation by logging a completed study session." }}
             />
           )}
         </div>
@@ -231,7 +260,7 @@ export function InsightsPage() {
               key={item.id || `${item.text}-${index}`}
               icon={index === 0 ? <AlertIcon /> : index === 1 ? <BookIcon /> : <StarIcon />}
               title={item.type}
-              text={item.text}
+              item={item}
               badge={index === 0 ? 'terra' : index === 1 ? 'indigo' : 'sage'}
               badgeLabel={index === 0 ? 'Priority' : index === 1 ? 'Practice' : 'Progress'}
             />
@@ -240,7 +269,7 @@ export function InsightsPage() {
           <InsightTip
             icon={<AlertIcon />}
             title="No Pattern Yet"
-            text="Add a few more logs to unlock stronger trend-based coaching."
+            item={{ text: "Add a few more logs to unlock stronger trend-based coaching." }}
             badge="gold"
             badgeLabel="In Progress"
           />
@@ -261,7 +290,10 @@ export function InsightsPage() {
               return (
                 <div key={item.id || `${item.text}-${index}`} style={{ display: 'flex', gap: 11, alignItems: 'center', padding: '10px 13px', background: item.isPlan ? 'linear-gradient(160deg, #F0F4FF 0%, #FAFBFF 100%)' : 'var(--cream)', borderRadius: 'var(--r-sm)', borderLeft: item.isPlan ? '3px solid var(--indigo)' : 'none' }}>
                   <div style={{ fontSize: 10, color: 'var(--text-soft)', minWidth: 58 }}>{formatInsightTime(item.created_at)}</div>
-                  <div style={{ flex: 1, fontSize: '12.5px', color: 'var(--text-mid)' }}>{item.text}</div>
+                  <div style={{ flex: 1, fontSize: '12.5px', color: 'var(--text-mid)' }}>
+                    {item.finding && <div style={{marginBottom: 4, color: 'var(--text-soft)'}}>{item.finding}</div>}
+                    {item.action ? <div style={{fontWeight: 500, color: 'var(--indigo)'}}>👉 {item.action}</div> : item.text}
+                  </div>
                   {item.isPlan && <Badge variant="indigo">Plan</Badge>}
                   <Badge variant={badgeMeta.badge}>{badgeMeta.label}</Badge>
                 </div>
@@ -278,15 +310,18 @@ export function InsightsPage() {
   )
 }
 
-function SmallInsight({ icon, title, color, text, onLike, onDislike }: { icon: ReactNode; title: string; color: string; text: string; onLike?: () => void; onDislike?: () => void }) {
+function SmallInsight({ icon, title, color, item, onLike, onDislike }: { icon: ReactNode; title: string; color: string; item: any; onLike?: () => void; onDislike?: () => void }) {
   const { showToast } = useToast()
   return (
     <div className="card" style={{ padding: '16px 18px' }}>
       <div style={{ display: 'flex', gap: 11, alignItems: 'flex-start' }}>
         <div style={{ width: 34, height: 34, borderRadius: 'var(--r-sm)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, border: '1.5px solid var(--border)', background: 'linear-gradient(160deg, #FFFFFF 0%, #FFF8F2 100%)', color: 'var(--text-mid)' }}>{icon}</div>
         <div>
-          <div style={{ fontSize: '12.5px', fontWeight: 600, color, marginBottom: 2 }}>{title}</div>
-          <div style={{ fontSize: '12.5px', color: 'var(--text-mid)', lineHeight: 1.5 }}>{text}</div>
+          <div style={{ fontSize: '12.5px', fontWeight: 600, color, marginBottom: 4 }}>{item?.title || title}</div>
+          <div style={{ fontSize: '12.5px', color: 'var(--text-mid)', lineHeight: 1.5 }}>
+            {item?.finding && <div style={{marginBottom: 4, color: 'var(--text-soft)'}}>{item.finding}</div>}
+            {item?.action ? <div style={{fontWeight: 500, color: 'var(--indigo)'}}>👉 {item.action}</div> : item?.text}
+          </div>
         </div>
       </div>
       <div style={{ marginTop: 9, display: 'flex', gap: 7 }}>
@@ -297,12 +332,15 @@ function SmallInsight({ icon, title, color, text, onLike, onDislike }: { icon: R
   )
 }
 
-function InsightTip({ icon, title, text, badge, badgeLabel }: { icon: ReactNode; title: string; text: string; badge: 'terra' | 'indigo' | 'sage' | 'gold'; badgeLabel: string }) {
+function InsightTip({ icon, title, item, badge, badgeLabel }: { icon: ReactNode; title: string; item: any; badge: 'terra' | 'indigo' | 'sage' | 'gold'; badgeLabel: string }) {
   return (
     <div className="card">
       <div style={{ width: 34, height: 34, marginBottom: 9, borderRadius: 'var(--r-sm)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1.5px solid var(--border)', background: 'linear-gradient(160deg, #FFFFFF 0%, #FFF8F2 100%)', color: 'var(--text-mid)' }}>{icon}</div>
-      <div style={{ fontSize: '13.5px', fontWeight: 600, marginBottom: 4 }}>{title}</div>
-      <div style={{ fontSize: '12.5px', color: 'var(--text-soft)', lineHeight: 1.6 }}>{text}</div>
+      <div style={{ fontSize: '13.5px', fontWeight: 600, marginBottom: 6 }}>{item?.title || title}</div>
+      <div style={{ fontSize: '12.5px', color: 'var(--text-soft)', lineHeight: 1.6 }}>
+        {item?.finding && <div style={{marginBottom: 4}}>{item.finding}</div>}
+        {item?.action ? <div style={{fontWeight: 500, color: 'var(--indigo)'}}>👉 {item.action}</div> : item?.text}
+      </div>
       <div style={{ marginTop: 9 }}><Badge variant={badge}>{badgeLabel}</Badge></div>
     </div>
   )
