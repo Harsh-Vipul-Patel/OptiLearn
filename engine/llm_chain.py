@@ -489,7 +489,7 @@ class ContextBuilder:
 class GroqInsightChain:
     """
     LangChain + LangGraph pipeline that converts cross-dimensional study
-    pattern data into actionable, non-generic insights via Gemini.
+    pattern data into actionable, non-generic insights via Groq.
 
     Key design principles:
     - ContextBuilder computes all patterns before the LLM sees anything
@@ -543,7 +543,7 @@ Schema:
     EFFICIENCY_RANGE    = (0, 100)
     MAX_PROMPT_CHARS    = 2400
 
-    def __init__(self, api_key: Optional[str] = None, model: str = "llama3-70b-8192"):
+    def __init__(self, api_key: Optional[str] = None, model: str = "llama-3.3-70b-versatile"):
         self.api_key    = api_key or os.environ.get("GROQ_API_KEY", "")
         self.model_name = model
         self._llm: Optional[ChatGroq] = None
@@ -823,7 +823,7 @@ Schema:
 
     def _generate_insights(self, state: InsightState) -> InsightState:
         """
-        Node 2: Call Gemini.
+        Node 2: Call Groq.
 
         QUOTA SAFETY:
         - If daily quota is exhausted (_is_daily_quota_exhausted), fail fast.
@@ -860,12 +860,12 @@ Schema:
         except Exception as exc:
             if _is_daily_quota_exhausted(exc):
                 logger.error(
-                    "Daily Gemini quota exhausted — failing fast, no retries. "
+                    "Daily Groq quota exhausted — failing fast, no retries. "
                     "Fallback recommendations will be used."
                 )
                 state["quota_exhausted"] = True
             else:
-                logger.error("Gemini LLM call failed: %s", exc)
+                logger.error("Groq LLM call failed: %s", exc)
             state["error"] = str(exc)
             state["llm_response"] = ""
 
