@@ -784,26 +784,36 @@ class InsightExtractor:
         if len(historical_sessions) < 5:
             return {'sufficient_data': False}
 
-        highs = [s for s in historical_sessions if float(s.get('Efficiency', 0) or 0) >= 70]
-        lows = [s for s in historical_sessions if float(s.get('Efficiency', 0) or 0) < 50]
-
         correlations: Dict[str, Any] = {}
-        if highs and lows:
-            high_slots = [str(s.get('TimeSlot') or 'Unknown') for s in highs]
-            low_slots = [str(s.get('TimeSlot') or 'Unknown') for s in lows]
 
-            high_best = max({slot: high_slots.count(slot) for slot in set(high_slots)}.items(), key=lambda item: item[1])
-            low_best = max({slot: low_slots.count(slot) for slot in set(low_slots)}.items(), key=lambda item: item[1])
+        # Build timeslot averages directly from all sessions to avoid
+        # contradictory signals where the same slot appears in both high/low buckets.
+        slot_efficiencies: Dict[str, List[float]] = {}
+        for session in historical_sessions:
+            slot = str(session.get('TimeSlot') or 'Unknown')
+            eff = float(session.get('Efficiency', 0) or 0)
+            slot_efficiencies.setdefault(slot, []).append(eff)
 
-            high_avg = float(np.mean([float(s.get('Efficiency', 0) or 0) for s in highs]))
-            low_avg = float(np.mean([float(s.get('Efficiency', 0) or 0) for s in lows]))
-            correlations['timeslot_driver'] = {
-                'best_timeslot': high_best[0],
-                'worst_timeslot': low_best[0],
-                'best_avg_efficiency': high_avg,
-                'worst_avg_efficiency': low_avg,
-                'delta': high_avg - low_avg,
-            }
+        # Require at least 2 samples per slot for stability.
+        slot_averages = {
+            slot: float(np.mean(values))
+            for slot, values in slot_efficiencies.items()
+            if len(values) >= 2
+        }
+
+        if len(slot_averages) >= 2:
+            best = max(slot_averages.items(), key=lambda item: item[1])
+            worst = min(slot_averages.items(), key=lambda item: item[1])
+            if best[0] != worst[0]:
+                correlations['timeslot_driver'] = {
+                    'best_timeslot': best[0],
+                    'worst_timeslot': worst[0],
+                    'best_avg_efficiency': best[1],
+                    'worst_avg_efficiency': worst[1],
+                    'delta': best[1] - worst[1],
+                    'best_sample_size': len(slot_efficiencies.get(best[0], [])),
+                    'worst_sample_size': len(slot_efficiencies.get(worst[0], [])),
+                }
 
         return {
             'sufficient_data': True,
@@ -896,12 +906,14 @@ class InsightExtractor:
         perf = insights.get('performance_correlations', {}).get('correlations', {})
         if 'timeslot_driver' in perf:
             driver = perf['timeslot_driver']
-            if float(driver.get('delta', 0)) > 20:
+            best_slot = str(driver.get('best_timeslot') or '')
+            worst_slot = str(driver.get('worst_timeslot') or '')
+            if best_slot and worst_slot and best_slot != worst_slot and float(driver.get('delta', 0)) > 20:
                 interventions.append({
                     'type': 'schedule_optimization',
                     'priority': 'critical',
-                    'problem': f"{driver.get('worst_timeslot')} sessions are underperforming",
-                    'solution_vector': f"Shift hard topics to {driver.get('best_timeslot')}",
+                    'problem': f"{worst_slot} sessions are underperforming",
+                    'solution_vector': f"Shift hard topics to {best_slot}",
                     'expected_improvement': f"+{driver.get('delta', 0):.0f}% efficiency",
                 })
 
@@ -918,6 +930,50 @@ class InsightExtractor:
         priority_rank = {'critical': 0, 'high': 1, 'medium': 2, 'low': 3}
         interventions.sort(key=lambda item: priority_rank.get(str(item.get('priority', 'low')), 3))
         return interventions[:5]
+
+    @staticmethod
+    def _recommendation_category(text: str) -> str:
+        lower = text.lower()
+        if 'declining' in lower or 'trending down' in lower or 'improving' in lower:
+            return 'trend'
+        if 'perform best during' in lower or 'sessions are underperforming' in lower or 'shift hard topics' in lower:
+            return 'timeslot'
+        if 'schedule harder topics on' in lower or 'sessions avg' in lower:
+            return 'day_of_week'
+        if 'average efficiency is' in lower or 'over your last' in lower:
+            return 'summary'
+        return 'general'
+
+    def _merge_recommendations(self, primary: List[str], secondary: List[str], limit: int = 7) -> List[str]:
+        merged: List[str] = []
+        seen_text = set()
+        seen_category = set()
+
+        def add_text(text: str, keep_one_per_category: bool) -> None:
+            normalized = text.strip()
+            if not normalized:
+                return
+            if normalized in seen_text:
+                return
+            category = self._recommendation_category(normalized)
+            if keep_one_per_category and category != 'general' and category in seen_category:
+                return
+            merged.append(normalized)
+            seen_text.add(normalized)
+            if category != 'general':
+                seen_category.add(category)
+
+        for item in primary:
+            add_text(item, keep_one_per_category=True)
+            if len(merged) >= limit:
+                return merged[:limit]
+
+        for item in secondary:
+            add_text(item, keep_one_per_category=True)
+            if len(merged) >= limit:
+                return merged[:limit]
+
+        return merged[:limit]
 
 
 # ============================================================================
@@ -1227,9 +1283,7 @@ class CognitiveAnalyticsEngine:
                 pattern_recs = self._generate_historical_recommendations(
                     historical_sessions, insight_bundle
                 )
-                for pr in pattern_recs:
-                    if pr not in recs:
-                        recs.append(pr)
+                recs = self._merge_recommendations(recs, pattern_recs, limit=7)
 
                 if recs:
                     insights.append({
@@ -1237,7 +1291,7 @@ class CognitiveAnalyticsEngine:
                         'analysis_id': 'pattern_analysis',
                         'efficiency': current_session['Efficiency'],
                         'quality_score': 0,
-                        'recommendations': recs[:7],
+                        'recommendations': recs,
                     })
 
         return {
@@ -1485,11 +1539,13 @@ class CognitiveAnalyticsEngine:
         # Temporal patterns
         temporal = insight_bundle.get('temporal_patterns', {})
         dow = temporal.get('day_of_week', {})
-        if dow.get('best_day') and dow.get('worst_day') and dow.get('delta', 0) > 10:
+        best_day = dow.get('best_day')
+        worst_day = dow.get('worst_day')
+        if best_day and worst_day and best_day != worst_day and dow.get('delta', 0) > 10:
             recs.append(
-                f"Your {dow['best_day']} sessions avg {dow['best_avg']:.0f}% efficiency vs "
-                f"{dow['worst_avg']:.0f}% on {dow['worst_day']}. "
-                f"Schedule harder topics on {dow['best_day']}."
+                f"Your {best_day} sessions avg {dow['best_avg']:.0f}% efficiency vs "
+                f"{dow['worst_avg']:.0f}% on {worst_day}. "
+                f"This week, move one hard session from {worst_day} to {best_day}."
             )
 
         # Efficiency trajectory
@@ -1510,11 +1566,13 @@ class CognitiveAnalyticsEngine:
         if perf.get('sufficient_data'):
             corr = perf.get('correlations', {})
             ts_driver = corr.get('timeslot_driver', {})
-            if ts_driver.get('best_timeslot') and ts_driver.get('delta', 0) > 15:
+            best_slot = ts_driver.get('best_timeslot')
+            worst_slot = ts_driver.get('worst_timeslot')
+            if best_slot and worst_slot and best_slot != worst_slot and ts_driver.get('delta', 0) > 15:
                 recs.append(
-                    f"You perform best during {ts_driver['best_timeslot']} sessions "
+                    f"You perform best during {best_slot} sessions "
                     f"({ts_driver.get('best_avg_efficiency', 0):.0f}% avg efficiency). "
-                    f"Try scheduling more sessions during this time."
+                    f"Shift one demanding topic from {worst_slot} to {best_slot} for the next 7 days."
                 )
 
         # Overall summary
@@ -1522,7 +1580,7 @@ class CognitiveAnalyticsEngine:
             avg_eff = sum(float(s.get('Efficiency', 0) or 0) for s in sessions) / len(sessions)
             recs.append(
                 f"Over your last {len(sessions)} sessions, your average efficiency is "
-                f"{avg_eff:.0f}%. {'Room for improvement — try reducing distractions.' if avg_eff < 60 else 'Solid performance!'}"
+                f"{avg_eff:.0f}%. {'Run a 7-day focus reset: cap sessions at 35-45 min, phone away, and add a 3-line reflection after each session.' if avg_eff < 60 else 'Solid performance! Keep your current session format and protect your top-performing time slots.'}"
             )
 
         return recs

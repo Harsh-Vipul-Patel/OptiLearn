@@ -132,6 +132,29 @@ export async function POST(request: Request) {
 
     if (allRecs.length > 0) {
       const supabase = createClient()
+      const startOfDay = new Date()
+      startOfDay.setHours(0, 0, 0, 0)
+      const startIso = startOfDay.toISOString()
+
+      // Keep today's insight feed coherent by replacing the current day's
+      // generated batch instead of stacking multiple runs.
+      const { error: cleanupErr } = await supabase
+        .from('suggestion')
+        .delete()
+        .eq('user_id', userId)
+        .gte('created_at', startIso)
+
+      if (cleanupErr) {
+        console.warn('[insights/POST] suggestion cleanup failed:', cleanupErr.message)
+        const { error: legacyCleanupErr } = await supabase
+          .from('suggestions')
+          .delete()
+          .eq('user_id', userId)
+          .gte('created_at', startIso)
+        if (legacyCleanupErr) {
+          console.warn('[insights/POST] legacy suggestions cleanup failed:', legacyCleanupErr.message)
+        }
+      }
 
       const inserts = allRecs.map((text) => ({
         user_id: userId,
