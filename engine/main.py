@@ -19,6 +19,7 @@ from core_engine import CognitiveAnalyticsEngine
 import os
 import httpx
 import logging
+import json
 from typing import Optional, List
 
 logging.basicConfig(level=logging.INFO)
