@@ -222,7 +222,7 @@ export function InsightsPage() {
           <div className="insight-label">Today&apos;s Top Insight {top?.title ? `— ${top.title}` : ''}</div>
           <div className="insight-text">
             {top?.finding && <div style={{marginBottom: 8, fontSize: '14px'}}>{top.finding}</div>}
-            {top?.action ? <div style={{fontWeight: 600, color: 'var(--indigo)'}}>👉 {top.action}</div> : <div>&quot;{topText}&quot;</div>}
+            {top?.action ? <div style={{fontWeight: 600, color: 'rgba(255, 220, 170, .95)'}}>👉 {top.action}</div> : <div>&quot;{topText}&quot;</div>}
           </div>
           <div className="insight-actions">
             <button className="insight-btn insight-btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={() => onFeedback(top?.id, 'like')}><ThumbsUpIcon width={16} height={16} />Helpful</button>
