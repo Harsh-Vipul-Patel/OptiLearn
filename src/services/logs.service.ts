@@ -8,6 +8,7 @@ type LogWithOwnership = {
   quality_score?: number | string | null
   analyzed_at?: string | null
   dailyPlan?: {
+    topic_id?: string
     studyTopic?: {
       subject?: {
         user_id?: string
