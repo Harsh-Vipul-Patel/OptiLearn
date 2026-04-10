@@ -67,7 +67,29 @@ export function AnalyticsPage() {
   const [subjectMonthFilter, setSubjectMonthFilter] = useState('all')
   const [effMonthFilter, setEffMonthFilter] = useState('all')
   const [breakdownMonthFilter, setBreakdownMonthFilter] = useState('all')
+  const [isExporting, setIsExporting] = useState(false)
   
+  const handleExportPDF = async () => {
+    try {
+      setIsExporting(true)
+      const html2pdf = (await import('html2pdf.js')).default;
+      const element = document.getElementById('analytics-content');
+      if (!element) return;
+      const opt = {
+        margin:       0.4,
+        filename:     `Study_Report_${tab}.pdf`,
+        image:        { type: 'jpeg', quality: 0.98 },
+        html2canvas:  { scale: 2, useCORS: true },
+        jsPDF:        { unit: 'in', format: 'a4', orientation: 'portrait' }
+      };
+      html2pdf().set(opt).from(element).save();
+    } catch (err) {
+      console.error('Failed to export PDF', err);
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
   // Data Aggregations
   const now = new Date()
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
@@ -365,9 +387,19 @@ export function AnalyticsPage() {
   )
 
   return (
-    <div>
-      <div className="page-title">Analytics</div>
-      <div className="page-sub">Your productivity story, told seamlessly through live data.</div>
+    <div id="analytics-content">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <div>
+          <div className="page-title" style={{ marginBottom: 4 }}>Analytics</div>
+          <div className="page-sub" style={{ margin: 0 }}>Your productivity story, told seamlessly through live data.</div>
+        </div>
+        {!isExporting && (
+          <button onClick={handleExportPDF} className="insight-btn insight-btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, opacity: isExporting ? 0.5 : 1 }} disabled={isExporting}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            Export PDF
+          </button>
+        )}
+      </div>
       <div className="tabs">
         <button className={`tab${tab === 'week' ? ' active' : ''}`} onClick={() => setTab('week')}>This Week</button>
         <button className={`tab${tab === 'month' ? ' active' : ''}`} onClick={() => setTab('month')}>This Month</button>

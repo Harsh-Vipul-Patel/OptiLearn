@@ -37,6 +37,12 @@ const NAV_ITEMS = [
     desc: 'Personalised recommendations & burnout alerts',
     icon: <InsightsIcon />,
   },
+  {
+    href: '/dashboard/vault',
+    label: 'Knowledge Vault',
+    desc: 'Generate quizzes and AI flashcards from notes',
+    icon: <VaultIcon />,
+  },
 ]
 
 function getCurrentPageLabel(pathname: string): string {
@@ -233,6 +239,13 @@ function InsightsIcon() {
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <path d="M12 2a10 10 0 0 1 10 10c0 4-2.5 7.4-6 9l-1 2H9l-1-2c-3.5-1.6-6-5-6-9A10 10 0 0 1 12 2z"/>
       <line x1="12" y1="14" x2="12" y2="18"/>
+    </svg>
+  )
+}
+function VaultIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/>
     </svg>
   )
 }

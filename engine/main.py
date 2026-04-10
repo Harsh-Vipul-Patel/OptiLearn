@@ -79,6 +79,8 @@ class TodayInsightsRequest(BaseModel):
     user_id: str
     wellness_context: Optional[WellnessContext] = None
 
+class VaultGenerateRequest(BaseModel):
+    text: str
 
 # ── Helpers ─────────────────────────────────────────────────────────
 def _verify_key(key: str) -> None:
@@ -308,3 +310,55 @@ async def generate_ai_insights(
     except Exception as error:
         logger.exception("[engine] Error generating AI insights for user %s", req.user_id)
         raise HTTPException(400, f"Unable to generate AI insights: {error}")
+
+# ── Generate Quiz from Vault Text ──────────────────────────────────
+@app.post("/engine/vault/generate")
+async def generate_vault_quiz(req: VaultGenerateRequest, x_engine_key: str = Header(...)):
+    _verify_key(x_engine_key)
+    groq_key = os.environ.get("GROQ_API_KEY", "")
+    if not groq_key:
+        raise HTTPException(500, "GROQ_API_KEY is not configured")
+        
+    prompt = f"""You are an expert tutor. Create a 3-question flashcard quiz based on the following notes.
+Output strictly as a JSON array where each object has 'question' and 'answer'. No markdown formatting blocks like ```json, just the raw JSON.
+Notes:
+{req.text[:2000]}
+"""
+    
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {groq_key}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": "llama-3.3-70b-versatile",
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0.3
+                },
+                timeout=20.0
+            )
+            data = resp.json()
+            if "choices" in data and len(data["choices"]) > 0:
+                raw_content = data["choices"][0]["message"]["content"]
+                # Try to clean markdown block
+                cleaned = raw_content.strip()
+                if cleaned.startswith("```json"):
+                    cleaned = cleaned[7:]
+                if cleaned.startswith("```"):
+                    cleaned = cleaned[3:]
+                if cleaned.endswith("```"):
+                    cleaned = cleaned[:-3]
+                
+                try:
+                    quiz_data = json.loads(cleaned.strip())
+                    return {"status": "ok", "quiz": quiz_data}
+                except json.JSONDecodeError:
+                    return {"status": "error", "message": "Failed to parse JSON from AI", "raw": raw_content}
+            else:
+                raise HTTPException(500, f"Groq API returned unknown format: {data}")
+        except Exception as e:
+            logger.exception("[engine] Error generating vault quiz")
+            raise HTTPException(500, f"Error calling Groq API: {e}")

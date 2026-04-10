@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 
 import { InsightsService } from '@/services/insights.service'
 import { CheckinService } from '@/services/checkin.service'
+import { LogsService } from '@/services/logs.service'
 import { triggerTodayInsights, triggerAIInsights } from '@/lib/engineClient'
 import type { WellnessContext } from '@/lib/engineClient'
 
@@ -183,6 +184,68 @@ export async function POST(request: Request) {
         }
       } else {
         console.log('[insights/POST] Saved', inserts.length, 'recommendations to "suggestion" table')
+      }
+
+      // -- Phase 4: Smart Spaced Repetition --
+      try {
+        console.log('[insights/POST] Running Smart Spaced Repetition checks...')
+        
+        // Fetch user logs (already ownership filtered and merged with efficiency metrics)
+        const recentLogs = await LogsService.getLogs(userId);
+        
+        // Consider logs from the past 7 days
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        const topicsToReview = new Set<string>();
+
+        recentLogs.forEach(log => {
+          // @ts-ignore - created_at exists on log
+          const logDate = new Date(log.created_at || new Date());
+          if (logDate >= sevenDaysAgo) {
+            const eff = Number(log.efficiency);
+            // @ts-ignore - focus_level might exist
+            const focus = Number(log.focus_level || 5); 
+
+            if ((!isNaN(eff) && eff < 60) || focus < 3) {
+              const topicId = log.dailyPlan?.topic_id;
+              if (topicId) {
+                topicsToReview.add(topicId);
+              }
+            }
+          }
+        });
+
+        if (topicsToReview.size > 0) {
+          console.log(`[insights/POST] Found ${topicsToReview.size} topics needing review.`);
+          const reviewDateRaw = new Date();
+          reviewDateRaw.setDate(reviewDateRaw.getDate() + 3); // 3 days spacing
+          const planDateStr = reviewDateRaw.toISOString().split('T')[0];
+
+          for (const topicId of topicsToReview) {
+            // Check if already planned
+            const { data: existingPlan } = await supabase
+              .from('daily_plan')
+              .select('plan_id')
+              .eq('topic_id', topicId)
+              .gte('plan_date', startIso)
+              .limit(1);
+
+            if (!existingPlan || existingPlan.length === 0) {
+              console.log(`[insights/POST] Auto-scheduling spaced repetition review for topic_id ${topicId} on ${planDateStr}`);
+              await supabase
+                .from('daily_plan')
+                .insert([{
+                  topic_id: topicId,
+                  target_duration: 30, // 30 mins review sprint
+                  plan_date: planDateStr,
+                  goal_type: 'Review (Auto-Scheduled)',
+                  time_slot: 'Evening'
+                }]);
+            }
+          }
+        }
+      } catch (repErr) {
+        console.error('[insights/POST] Error in Spaced Repetition scheduling:', repErr);
       }
     }
 
