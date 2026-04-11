@@ -808,7 +808,7 @@ export function AnalyticsPage() {
 
 /* ── Chart.js integration via dynamic script ── */
 function useCharts(
-  tab: 'week' | 'month',
+  tab: 'week' | 'month' | 'digest',
   weekData: {
     labels: string[],
     planned: number[],

@@ -6,11 +6,12 @@ interface BadgeProps {
   variant?: BadgeVariant
   children: ReactNode
   className?: string
+  style?: React.CSSProperties
 }
 
-export function Badge({ variant = 'indigo', children, className = '' }: BadgeProps) {
+export function Badge({ variant = 'indigo', children, className = '', style }: BadgeProps) {
   return (
-    <span className={`badge badge-${variant} ${className}`}>
+    <span className={`badge badge-${variant} ${className}`} style={style}>
       {children}
     </span>
   )

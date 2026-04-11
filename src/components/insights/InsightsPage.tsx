@@ -291,7 +291,7 @@ export function InsightsPage() {
                 item={item}
                 onLike={() => onFeedback(item.id, 'like')}
                 onDislike={() => onFeedback(item.id, 'dislike')}
-                onAddPlan={item.planSuggestion ? () => setActiveSuggestion({ suggestion: item.planSuggestion, title: item.title }) : undefined}
+                onAddPlan={item.planSuggestion ? () => setActiveSuggestion({ suggestion: item.planSuggestion as PlanSuggestion, title: item.title }) : undefined}
               />
             ))
           ) : (
