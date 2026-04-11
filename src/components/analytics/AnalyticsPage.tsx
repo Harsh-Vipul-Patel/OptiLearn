@@ -16,6 +16,10 @@ type StudyLog = {
   efficiency?: number | string | null
   focus_level?: number
   dailyPlan?: {
+    start_time?: string | null
+    end_time?: string | null
+    target_duration?: number | null
+    time_slot?: string | null
     studyTopic?: {
       subject?: {
         subject_name?: string
@@ -26,6 +30,22 @@ type StudyLog = {
 
 type ChartLike = {
   destroy: () => void
+}
+
+type DigestItem = { text: string; metric?: string }
+type WeeklyDigest = {
+  week: string
+  wins: DigestItem[]
+  issues: DigestItem[]
+  actions: DigestItem[]
+  summary: {
+    totalHours: string
+    sessions: number
+    avgEfficiency: string
+    avgDelay: string
+    bestSubject: string
+    worstSubject: string
+  }
 }
 
 function toLocalDateKey(date: Date): string {
@@ -61,13 +81,30 @@ export function AnalyticsPage() {
   const subjectMonthRef = useRef<HTMLCanvasElement>(null)
   const effMonthRef = useRef<HTMLCanvasElement>(null)
   const subjectBreakdownMonthRef = useRef<HTMLCanvasElement>(null)
+  const procrastinationRef = useRef<HTMLCanvasElement>(null)
+  const priorityMatrixRef = useRef<HTMLCanvasElement>(null)
+  const timeOnTaskRef = useRef<HTMLCanvasElement>(null)
 
-  const [tab, setTab] = useState<'week' | 'month'>('week')
+  const [tab, setTab] = useState<'week' | 'month' | 'digest'>('week')
   const [planVsActualFilter, setPlanVsActualFilter] = useState('all')
   const [subjectMonthFilter, setSubjectMonthFilter] = useState('all')
   const [effMonthFilter, setEffMonthFilter] = useState('all')
   const [breakdownMonthFilter, setBreakdownMonthFilter] = useState('all')
   const [isExporting, setIsExporting] = useState(false)
+  const [digest, setDigest] = useState<WeeklyDigest | null>(null)
+  const [digestLoading, setDigestLoading] = useState(false)
+
+  // Fetch digest when tab switches
+  useEffect(() => {
+    if (tab !== 'digest') return
+    if (digest) return // already loaded
+    setDigestLoading(true)
+    fetch('/api/digest')
+      .then(r => r.json())
+      .then(data => { if (data.digest) setDigest(data.digest) })
+      .catch(console.error)
+      .finally(() => setDigestLoading(false))
+  }, [tab, digest])
   
   const handleExportPDF = async () => {
     try {
@@ -144,18 +181,61 @@ export function AnalyticsPage() {
   const wStats = calculateStats(weekLogs)
   const mStats = calculateStats(monthLogs)
 
+  // ── Procrastination Tracker Data ──
+  const computeDelayMinutes = (log: StudyLog): number | null => {
+    const plannedStart = log.dailyPlan?.start_time
+    if (!plannedStart || !log.start_time) return null
+    // planned start is TIME (HH:MM:SS), actual start is TIMESTAMPTZ
+    const actualDate = new Date(log.start_time)
+    if (Number.isNaN(actualDate.getTime())) return null
+    const [ph, pm] = plannedStart.split(':').map(Number)
+    if (!Number.isFinite(ph) || !Number.isFinite(pm)) return null
+    const plannedMinutes = ph * 60 + pm
+    const actualMinutes = actualDate.getHours() * 60 + actualDate.getMinutes()
+    return actualMinutes - plannedMinutes // positive = late
+  }
+
+  const weekDelays = weekLogs.map(computeDelayMinutes).filter((d): d is number => d !== null)
+  const monthDelays = monthLogs.map(computeDelayMinutes).filter((d): d is number => d !== null)
+  const avgWeekDelay = weekDelays.length > 0 ? Math.round(weekDelays.reduce((a, b) => a + b, 0) / weekDelays.length) : 0
+  const avgMonthDelay = monthDelays.length > 0 ? Math.round(monthDelays.reduce((a, b) => a + b, 0) / monthDelays.length) : 0
+
+  // Delay by time slot (for the month chart)
+  const slotDelayMap: Record<string, number[]> = {}
+  monthLogs.forEach(log => {
+    const delay = computeDelayMinutes(log)
+    if (delay === null) return
+    const slot = log.dailyPlan?.time_slot || 'Unknown'
+    if (!slotDelayMap[slot]) slotDelayMap[slot] = []
+    slotDelayMap[slot].push(delay)
+  })
+  const procrastSlotLabels = Object.keys(slotDelayMap)
+  const procrastSlotAvgs = procrastSlotLabels.map(s => {
+    const arr = slotDelayMap[s]
+    return arr.length > 0 ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : 0
+  })
+
+
+  const formatDelay = (mins: number) => {
+    if (mins === 0) return 'On time'
+    const abs = Math.abs(mins)
+    const label = abs >= 60 ? `${(abs / 60).toFixed(1)}h` : `${abs}m`
+    return mins > 0 ? `+${label} late` : `${label} early`
+  }
 
   const WEEK_STATS = [
     { value: wStats.totalHours, label: 'Total This Week',  color: 'var(--terra)' },
     { value: wStats.avgEff,     label: 'Avg Efficiency',    color: 'var(--sage)'   },
     { value: wStats.avgFocus,   label: 'Avg Focus Score',   color: 'var(--indigo)' },
     { value: wStats.sessions,   label: 'Sessions Logged',   color: 'var(--gold)'   },
+    { value: weekDelays.length > 0 ? formatDelay(avgWeekDelay) : 'N/A', label: 'Avg Start Delay', color: avgWeekDelay > 10 ? 'var(--terra)' : 'var(--sage)' },
   ]
   const MONTH_STATS = [
     { value: mStats.totalHours, label: 'Total This Month', color: 'var(--terra)' },
     { value: mStats.avgEff,     label: 'Avg Efficiency',   color: 'var(--sage)'   },
     { value: mStats.avgFocus,   label: 'Avg Focus Score',  color: 'var(--indigo)' },
     { value: mStats.sessions,   label: 'Sessions Logged',  color: 'var(--gold)'   },
+    { value: monthDelays.length > 0 ? formatDelay(avgMonthDelay) : 'N/A', label: 'Avg Start Delay', color: avgMonthDelay > 10 ? 'var(--terra)' : 'var(--sage)' },
   ]
 
   const getWeekLabel = (weekIdx: number) => {
@@ -355,6 +435,47 @@ export function AnalyticsPage() {
     }
   })
 
+
+  // ── Subject Priority Matrix Data (scatter: hours vs efficiency change) ──
+  const subjectPriorityData: { label: string; hours: number; effDelta: number }[] = []
+  {
+    const subjectSessions: Record<string, { hours: number; efficiencies: { date: number; eff: number }[] }> = {}
+    monthLogs.forEach(log => {
+      const subjectName = getSubjectName(log)
+      const hours = getLogDurationHours(log)
+      const eff = parseEfficiencyPercent(log.efficiency)
+      const dateMs = new Date(log.start_time || '').getTime()
+      if (!subjectSessions[subjectName]) subjectSessions[subjectName] = { hours: 0, efficiencies: [] }
+      subjectSessions[subjectName].hours += hours
+      if (eff !== null && Number.isFinite(dateMs)) {
+        subjectSessions[subjectName].efficiencies.push({ date: dateMs, eff })
+      }
+    })
+    for (const [name, data] of Object.entries(subjectSessions)) {
+      const sorted = data.efficiencies.sort((a, b) => a.date - b.date)
+      let effDelta = 0
+      if (sorted.length >= 2) {
+        const half = Math.floor(sorted.length / 2)
+        const firstHalf = sorted.slice(0, half)
+        const secondHalf = sorted.slice(half)
+        const avgFirst = firstHalf.reduce((s, e) => s + e.eff, 0) / firstHalf.length
+        const avgSecond = secondHalf.reduce((s, e) => s + e.eff, 0) / secondHalf.length
+        effDelta = avgSecond - avgFirst
+      }
+      subjectPriorityData.push({ label: name, hours: Number(data.hours.toFixed(1)), effDelta: Number(effDelta.toFixed(1)) })
+    }
+  }
+
+  // ── Time-on-Task Correlation Data (scatter: session duration vs efficiency) ──
+  const timeOnTaskData: { x: number; y: number }[] = []
+  monthLogs.forEach(log => {
+    const durationMin = getLogDurationHours(log) * 60
+    const eff = parseEfficiencyPercent(log.efficiency)
+    if (durationMin > 0 && eff !== null) {
+      timeOnTaskData.push({ x: Math.round(durationMin), y: eff })
+    }
+  })
+
   useCharts(
     tab,
     {
@@ -374,6 +495,10 @@ export function AnalyticsPage() {
        subjectData: monthSubjectData,
        breakdownLabels: monthBreakdownLabels,
        breakdownEntries: subjectBreakdownEntries,
+       procrastSlotLabels,
+       procrastSlotAvgs,
+       subjectPriorityData,
+       timeOnTaskData,
     },
     {
        planVsActualWeek: planVsActualRef,
@@ -383,6 +508,9 @@ export function AnalyticsPage() {
        subjectMonth: subjectMonthRef,
        effMonth: effMonthRef,
        subjectBreakdownMonth: subjectBreakdownMonthRef,
+       procrastination: procrastinationRef,
+       priorityMatrix: priorityMatrixRef,
+       timeOnTask: timeOnTaskRef,
     }
   )
 
@@ -403,11 +531,12 @@ export function AnalyticsPage() {
       <div className="tabs">
         <button className={`tab${tab === 'week' ? ' active' : ''}`} onClick={() => setTab('week')}>This Week</button>
         <button className={`tab${tab === 'month' ? ' active' : ''}`} onClick={() => setTab('month')}>This Month</button>
+        <button className={`tab${tab === 'digest' ? ' active' : ''}`} onClick={() => setTab('digest')}>Weekly Digest</button>
       </div>
 
       {tab === 'week' && (
         <div>
-          <div className="grid-4" style={{ marginBottom: 18 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, marginBottom: 18 }}>
             {WEEK_STATS.map(st => (
               <div key={st.label} className="stat-card">
                 <div className="stat-value" style={{ color: st.color }}>{st.value}</div>
@@ -457,7 +586,7 @@ export function AnalyticsPage() {
 
       {tab === 'month' && (
         <div>
-          <div className="grid-4" style={{ marginBottom: 18 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, marginBottom: 18 }}>
             {MONTH_STATS.map(st => (
               <div key={st.label} className="stat-card">
                 <div className="stat-value" style={{ color: st.color }}>{st.value}</div>
@@ -537,6 +666,140 @@ export function AnalyticsPage() {
               </div>
             )}
           </div>
+
+          {/* ── Procrastination Tracker ── */}
+          <div className="card" style={{ marginTop: 18 }}>
+            <div className="section-title">Procrastination Tracker</div>
+            <div style={{ fontSize: '11.5px', color: 'var(--text-soft)', marginBottom: 10 }}>Average start delay by time slot — positive means you started late</div>
+            {procrastSlotLabels.length > 0 ? (
+              <div className="chart-wrap" style={{ height: 220 }}><canvas ref={procrastinationRef} /></div>
+            ) : (
+              <div className="chart-wrap" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 180, color: 'var(--text-soft)', fontSize: '13.5px' }}>
+                No sessions with planned start times yet. Use "Custom Time" in the planner.
+              </div>
+            )}
+          </div>
+
+          {/* ── Subject Priority Matrix + Time-on-Task ── */}
+          <div className="grid-2" style={{ marginTop: 18 }}>
+            <div className="card">
+              <div className="section-title">Subject Priority Matrix</div>
+              <div style={{ fontSize: '11.5px', color: 'var(--text-soft)', marginBottom: 10 }}>Effort (hours) vs Efficiency improvement — find quick wins</div>
+              {subjectPriorityData.length > 0 ? (
+                <div className="chart-wrap" style={{ height: 240 }}><canvas ref={priorityMatrixRef} /></div>
+              ) : (
+                <div className="chart-wrap" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 180, color: 'var(--text-soft)', fontSize: '13.5px' }}>
+                  Need multiple sessions across subjects to generate matrix
+                </div>
+              )}
+            </div>
+            <div className="card">
+              <div className="section-title">Time-on-Task Correlation</div>
+              <div style={{ fontSize: '11.5px', color: 'var(--text-soft)', marginBottom: 10 }}>Do longer sessions = better efficiency? Each dot = one session</div>
+              {timeOnTaskData.length > 0 ? (
+                <div className="chart-wrap" style={{ height: 240 }}><canvas ref={timeOnTaskRef} /></div>
+              ) : (
+                <div className="chart-wrap" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 180, color: 'var(--text-soft)', fontSize: '13.5px' }}>
+                  Need sessions with efficiency data to show correlation
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {tab === 'digest' && (
+        <div>
+          {digestLoading ? (
+            <div style={{ textAlign: 'center', color: 'var(--text-soft)', padding: '40px 0', fontSize: 14 }}>
+              Generating your weekly digest…
+            </div>
+          ) : !digest ? (
+            <div style={{ textAlign: 'center', color: 'var(--text-soft)', padding: '40px 0', fontSize: 14 }}>
+              No digest data available. Log more sessions to generate your report.
+            </div>
+          ) : (
+            <div>
+              <div style={{ fontSize: 13, color: 'var(--text-soft)', marginBottom: 18 }}>{digest.week}</div>
+
+              {/* Summary stat cards */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10, marginBottom: 20 }}>
+                {[
+                  { value: `${digest.summary.totalHours}h`, label: 'Total Hours', color: 'var(--terra)' },
+                  { value: digest.summary.sessions, label: 'Sessions', color: 'var(--gold)' },
+                  { value: digest.summary.avgEfficiency, label: 'Avg Efficiency', color: 'var(--sage)' },
+                  { value: digest.summary.avgDelay, label: 'Avg Delay', color: 'var(--indigo)' },
+                  { value: digest.summary.bestSubject, label: 'Best Subject', color: 'var(--sage)' },
+                  { value: digest.summary.worstSubject, label: 'Needs Work', color: 'var(--terra)' },
+                ].map(st => (
+                  <div key={st.label} className="stat-card">
+                    <div className="stat-value" style={{ color: st.color, fontSize: 18 }}>{st.value}</div>
+                    <div className="stat-label">{st.label}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* 3-3-3 Cards */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16 }}>
+                {/* Wins */}
+                <div className="card" style={{ borderTop: '3px solid var(--sage)' }}>
+                  <div className="section-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 20 }}>🏆</span> 3 Wins
+                  </div>
+                  {digest.wins.length === 0 ? (
+                    <div style={{ color: 'var(--text-soft)', fontSize: 13, fontStyle: 'italic' }}>No wins identified yet</div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      {digest.wins.map((item, i) => (
+                        <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 12px', background: 'rgba(107,155,122,.06)', borderRadius: 'var(--r-sm)', borderLeft: '3px solid var(--sage)' }}>
+                          <div style={{ flex: 1, fontSize: 13, color: 'var(--text-main)', lineHeight: 1.5 }}>{item.text}</div>
+                          {item.metric && <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--sage)', whiteSpace: 'nowrap' }}>{item.metric}</div>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Issues */}
+                <div className="card" style={{ borderTop: '3px solid var(--terra)' }}>
+                  <div className="section-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 20 }}>⚠️</span> 3 Issues
+                  </div>
+                  {digest.issues.length === 0 ? (
+                    <div style={{ color: 'var(--text-soft)', fontSize: 13, fontStyle: 'italic' }}>No issues found — keep it up!</div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      {digest.issues.map((item, i) => (
+                        <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 12px', background: 'rgba(201,107,58,.06)', borderRadius: 'var(--r-sm)', borderLeft: '3px solid var(--terra)' }}>
+                          <div style={{ flex: 1, fontSize: 13, color: 'var(--text-main)', lineHeight: 1.5 }}>{item.text}</div>
+                          {item.metric && <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--terra)', whiteSpace: 'nowrap' }}>{item.metric}</div>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Actions */}
+                <div className="card" style={{ borderTop: '3px solid var(--indigo)' }}>
+                  <div className="section-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 20 }}>🎯</span> 3 Actions
+                  </div>
+                  {digest.actions.length === 0 ? (
+                    <div style={{ color: 'var(--text-soft)', fontSize: 13, fontStyle: 'italic' }}>No actions needed yet</div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      {digest.actions.map((item, i) => (
+                        <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 12px', background: 'rgba(74,95,160,.06)', borderRadius: 'var(--r-sm)', borderLeft: '3px solid var(--indigo)' }}>
+                          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--indigo)', minWidth: 20 }}>{i + 1}.</div>
+                          <div style={{ flex: 1, fontSize: 13, color: 'var(--text-main)', lineHeight: 1.5 }}>{item.text}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -563,6 +826,10 @@ function useCharts(
     avgEff: number[],
     breakdownLabels: string[],
     breakdownEntries: [string, number[]][],
+    procrastSlotLabels: string[],
+    procrastSlotAvgs: number[],
+    subjectPriorityData: { label: string; hours: number; effDelta: number }[],
+    timeOnTaskData: { x: number; y: number }[],
   },
   refs: {
     planVsActualWeek: React.RefObject<HTMLCanvasElement | null>,
@@ -572,6 +839,9 @@ function useCharts(
     subjectMonth: React.RefObject<HTMLCanvasElement | null>,
     effMonth: React.RefObject<HTMLCanvasElement | null>,
     subjectBreakdownMonth: React.RefObject<HTMLCanvasElement | null>,
+    procrastination: React.RefObject<HTMLCanvasElement | null>,
+    priorityMatrix: React.RefObject<HTMLCanvasElement | null>,
+    timeOnTask: React.RefObject<HTMLCanvasElement | null>,
   }
 ) {
   useEffect(() => {
@@ -596,6 +866,9 @@ function useCharts(
       destroyExistingOnCanvas(refs.subjectMonth.current, Chart)
       destroyExistingOnCanvas(refs.effMonth.current, Chart)
       destroyExistingOnCanvas(refs.subjectBreakdownMonth.current, Chart)
+      destroyExistingOnCanvas(refs.procrastination.current, Chart)
+      destroyExistingOnCanvas(refs.priorityMatrix.current, Chart)
+      destroyExistingOnCanvas(refs.timeOnTask.current, Chart)
     }
 
     const buildWeek = () => {
@@ -827,6 +1100,110 @@ function useCharts(
           },
         }))
       }
+
+      // Procrastination Tracker bar chart
+      if (refs.procrastination.current && monthData.procrastSlotLabels.length > 0) {
+        destroyExistingOnCanvas(refs.procrastination.current, Chart)
+        const delayColors = monthData.procrastSlotAvgs.map((v: number) =>
+          v > 15 ? 'rgba(201,107,58,.7)' : v > 0 ? 'rgba(212,168,67,.6)' : 'rgba(107,155,122,.6)'
+        )
+        charts.push(new Chart(refs.procrastination.current, {
+          type: 'bar',
+          data: {
+            labels: monthData.procrastSlotLabels,
+            datasets: [{
+              label: 'Avg Delay (min)',
+              data: monthData.procrastSlotAvgs,
+              backgroundColor: delayColors,
+              borderColor: delayColors.map((c: string) => c.replace(/[\d.]+\)$/, '1)')),
+              borderWidth: 1.5,
+              borderRadius: 6,
+            }],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            indexAxis: 'y',
+            plugins: { legend: { display: false } },
+            scales: {
+              x: {
+                ticks: { font: CHART_FONT, callback: (v: number) => (v > 0 ? '+' : '') + v + 'm' },
+                grid: { color: 'rgba(100,80,50,.06)' },
+              },
+              y: { ticks: { font: CHART_FONT }, grid: { display: false } },
+            },
+          },
+        }))
+      }
+
+      // Subject Priority Matrix scatter
+      if (refs.priorityMatrix.current && monthData.subjectPriorityData.length > 0) {
+        destroyExistingOnCanvas(refs.priorityMatrix.current, Chart)
+        const scatterColors = ['#4A5FA0','#C96B3A','#6B9B7A','#D4A843','#B85C7A','#2A8C8C','#6B4F8C']
+        const datasets = monthData.subjectPriorityData.map((item: { label: string; hours: number; effDelta: number }, idx: number) => ({
+          label: item.label,
+          data: [{ x: item.hours, y: item.effDelta }],
+          backgroundColor: scatterColors[idx % scatterColors.length],
+          borderColor: scatterColors[idx % scatterColors.length],
+          pointRadius: 8,
+          pointHoverRadius: 11,
+        }))
+        charts.push(new Chart(refs.priorityMatrix.current, {
+          type: 'scatter',
+          data: { datasets },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { position: 'top', labels: { font: CHART_FONT, boxWidth: 8, boxHeight: 8, padding: 10 } },
+              tooltip: {
+                callbacks: {
+                  label: (ctx: { dataset: { label: string }; parsed: { x: number; y: number } }) =>
+                    `${ctx.dataset.label}: ${ctx.parsed.x}h effort, ${ctx.parsed.y > 0 ? '+' : ''}${ctx.parsed.y}% eff. change`,
+                },
+              },
+            },
+            scales: {
+              x: { title: { display: true, text: 'Hours Invested', font: CHART_FONT }, ticks: { font: CHART_FONT }, grid: { color: 'rgba(100,80,50,.06)' }, beginAtZero: true },
+              y: { title: { display: true, text: 'Efficiency Change (%)', font: CHART_FONT }, ticks: { font: CHART_FONT, callback: (v: number) => (v > 0 ? '+' : '') + v + '%' }, grid: { color: 'rgba(100,80,50,.06)' } },
+            },
+          },
+        }))
+      }
+
+      // Time-on-Task Correlation scatter
+      if (refs.timeOnTask.current && monthData.timeOnTaskData.length > 0) {
+        destroyExistingOnCanvas(refs.timeOnTask.current, Chart)
+        charts.push(new Chart(refs.timeOnTask.current, {
+          type: 'scatter',
+          data: {
+            datasets: [{
+              label: 'Session',
+              data: monthData.timeOnTaskData,
+              backgroundColor: 'rgba(74,95,160,.45)',
+              borderColor: '#4A5FA0',
+              pointRadius: 5,
+              pointHoverRadius: 7,
+            }],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  label: (ctx: { parsed: { x: number; y: number } }) => `${ctx.parsed.x} min → ${ctx.parsed.y}% eff.`,
+                },
+              },
+            },
+            scales: {
+              x: { title: { display: true, text: 'Session Duration (min)', font: CHART_FONT }, ticks: { font: CHART_FONT }, grid: { color: 'rgba(100,80,50,.06)' }, beginAtZero: true },
+              y: { title: { display: true, text: 'Efficiency (%)', font: CHART_FONT }, min: 0, max: 100, ticks: { font: CHART_FONT, stepSize: 20, callback: (v: number) => v + '%' }, grid: { color: 'rgba(100,80,50,.06)' } },
+            },
+          },
+        }))
+      }
     }
 
     const handleChartReady = () => {
@@ -867,6 +1244,10 @@ function useCharts(
     weekData.labels.join(','), weekData.planned.join(','), weekData.actual.join(','), weekData.avgFocus.join(','), weekData.subjectLabels.join(','), weekData.subjectData.join(','),
     monthData.labels.join(','), monthData.planned.join(','), monthData.actual.join(','), monthData.avgEff.join(','), monthData.subjectLabels.join(','), monthData.subjectData.join(','),
     monthData.breakdownLabels.join(','), monthData.breakdownEntries.map(([n,d]) => n+':'+d.join('|')).join(','),
-    refs.planVsActualWeek, refs.subjectWeek, refs.focusWeek, refs.planVsActualMonth, refs.subjectMonth, refs.effMonth, refs.subjectBreakdownMonth
+    monthData.procrastSlotLabels.join(','), monthData.procrastSlotAvgs.join(','),
+    monthData.subjectPriorityData.map(d => d.label+d.hours+d.effDelta).join(','),
+    monthData.timeOnTaskData.map(d => d.x+':'+d.y).join(','),
+    refs.planVsActualWeek, refs.subjectWeek, refs.focusWeek, refs.planVsActualMonth, refs.subjectMonth, refs.effMonth, refs.subjectBreakdownMonth,
+    refs.procrastination, refs.priorityMatrix, refs.timeOnTask
   ]) // Update when live data loads
 }

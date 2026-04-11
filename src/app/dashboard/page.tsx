@@ -13,6 +13,10 @@ import { BurnoutMonitor } from '@/components/dashboard/BurnoutMonitor'
 import { DailyCheckinModal } from '@/components/dashboard/DailyCheckinModal'
 import { AnalyticsIcon, BookIcon, BrainIcon, SparklesIcon, TargetIcon } from '@/components/ui/AppIcons'
 import { formatPlanScheduleLabel, getPlanSortMinutes } from '@/lib/planTimeLabel'
+import { useExamGoals } from '@/hooks/useExamGoals'
+import { ExamReadinessCard } from '@/components/dashboard/ExamReadinessCard'
+import { ProcrastinationTracker } from '@/components/dashboard/ProcrastinationTracker'
+import { useProcrastination } from '@/hooks/useProcrastination'
 
 type StudyLog = {
   plan_id?: string
@@ -85,6 +89,8 @@ export default function DashboardPage() {
   const todayDate = new Date().toISOString().slice(0, 10)
   const { plans }       = usePlans(todayDate)
   const { checkin, refreshCheckin, isLoading: checkinLoading } = useCheckin(session?.user?.id || '')
+  const { goals: examGoals, mutate: mutateExamGoals } = useExamGoals(session?.user?.id || '')
+  const { skipped, score: procScore, risk: procRisk, viewReady: procViewReady, isLoading: procLoading } = useProcrastination(session?.user?.id || '')
   const [checkinDismissed, setCheckinDismissed] = useState(false)
 
   // Show check-in modal when: user is logged in, no check-in today, not dismissed, not loading
@@ -291,6 +297,56 @@ export default function DashboardPage() {
       <div className="grid-2">
         <TodayPlanCard slots={TODAY_SLOTS} doneCount={TODAY_SLOTS.filter(s => s.status === 'done').length} totalCount={TODAY_SLOTS.length} />
         <BurnoutMonitor risk={burnoutRisk} bars={burnoutBars} message={burnoutMessage} />
+      </div>
+
+      <div style={{ marginTop: 18 }}>
+        <ProcrastinationTracker
+          skipped={skipped}
+          score={procScore}
+          risk={procRisk}
+          viewReady={procViewReady}
+          isLoading={procLoading}
+        />
+      </div>
+
+      {/* Exam Readiness */}
+      <div style={{ marginTop: 18 }}>
+        <ExamReadinessCard
+          goals={examGoals}
+          studiedHoursMap={(() => {
+            const map: Record<string, number> = {}
+            typedLogs.forEach(l => {
+              const plan = plans.find(p => p.plan_id === (l as { plan_id?: string }).plan_id)
+              if (plan?.studyTopic?.subject) {
+                const sid = plan.studyTopic.subject.subject_id
+                const start = new Date(String((l as { start_time?: string }).start_time || '')).getTime()
+                const end = (l as { end_time?: string | null }).end_time
+                  ? new Date(String((l as { end_time?: string | null }).end_time)).getTime()
+                  : new Date().getTime()
+                if (!Number.isNaN(start) && !Number.isNaN(end)) {
+                  map[sid] = (map[sid] || 0) + (end - start) / 3600000
+                }
+              }
+            })
+            return map
+          })()}
+          subjects={Array.from(new Set(plans.map(p => p.studyTopic?.subject).filter(Boolean))).map(s => ({
+            subject_id: s!.subject_id,
+            subject_name: s!.subject_name,
+          }))}
+          onAdd={async (data) => {
+            await fetch('/api/exam-goals', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(data),
+            })
+            await mutateExamGoals()
+          }}
+          onDelete={async (id) => {
+            await fetch(`/api/exam-goals?id=${id}`, { method: 'DELETE' })
+            await mutateExamGoals()
+          }}
+        />
       </div>
     </div>
   )

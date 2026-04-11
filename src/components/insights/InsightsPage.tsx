@@ -8,8 +8,10 @@ import { Badge } from '@/components/ui/Badge'
 import { Card } from '@/components/ui/Card'
 import { ReactNode, useMemo, useState } from 'react'
 import { ThumbsDownIcon, ThumbsUpIcon } from '@/components/ui/AppIcons'
-import { CheckCircleIcon, SparklesIcon } from '@/components/ui/AppIcons'
+import { CheckCircleIcon, SparklesIcon, CalendarIcon } from '@/components/ui/AppIcons'
 import { DailyCheckinModal } from '@/components/dashboard/DailyCheckinModal'
+import { PlanSuggestionModal, type PlanSuggestion } from './PlanSuggestionModal'
+import useSWR from 'swr'
 
 type SuggestionRow = {
   id?: string
@@ -34,9 +36,11 @@ function badgeFromReaction(reaction: FeedbackState): { badge: 'sage' | 'terra' |
   return { badge: 'gold', label: 'Pending' }
 }
 
+const fetcher = (url: string) => fetch(url).then(r => r.json())
+
 export function InsightsPage() {
   const { data: session } = useSession()
-  const { suggestions, refreshSuggestions, isLoading } = useSuggestionsSync(session?.user?.id || '')
+  const { suggestions, weakTopics, refreshSuggestions, isLoading } = useSuggestionsSync(session?.user?.id || '')
   const { checkin, refreshCheckin, isLoading: checkinLoading } = useCheckin(session?.user?.id || '')
   const { showToast } = useToast()
   const [feedbackBySuggestion, setFeedbackBySuggestion] = useState<Record<string, FeedbackState>>({})
@@ -46,6 +50,10 @@ export function InsightsPage() {
   // Check-in is pending when: not loading, no check-in found, user is logged in
   const checkinPending = !checkinLoading && !checkin && !!session?.user?.id
   const checkinCompleted = !checkinLoading && !!checkin && !!session?.user?.id
+
+  // Fetch flat topics for the plan suggestion modal
+  const { data: topicsData } = useSWR(session?.user?.id ? '/api/topics/all' : null, fetcher)
+  const [activeSuggestion, setActiveSuggestion] = useState<{ suggestion: PlanSuggestion, title: string } | null>(null)
 
   const normalized = useMemo(() => {
     return (suggestions as SuggestionRow[])
@@ -58,6 +66,7 @@ export function InsightsPage() {
         let finding = ''
         let action = ''
         let isPlan = false
+        let planSuggestion: PlanSuggestion | null = null
         
         try {
           const obj = JSON.parse(rawText)
@@ -66,7 +75,8 @@ export function InsightsPage() {
             title = obj.title || ''
             finding = obj.finding || ''
             action = obj.action || ''
-            isPlan = type.toLowerCase() === 'planning' || rawText.includes('📋')
+            planSuggestion = obj.plan_suggestion || null
+            isPlan = type.toLowerCase() === 'planning' || rawText.includes('📋') || !!planSuggestion
             text = action || finding || rawText
           } else {
              isPlan = rawText.startsWith('📋') || type.toLowerCase().includes('plan')
@@ -84,6 +94,7 @@ export function InsightsPage() {
           finding,
           action,
           isPlan,
+          planSuggestion,
           created_at: item.created_at,
         }
       })
@@ -170,6 +181,19 @@ export function InsightsPage() {
         />
       )}
 
+      {/* Plan Suggestion Modal */}
+      {activeSuggestion && (
+        <PlanSuggestionModal
+          suggestion={activeSuggestion.suggestion}
+          insightTitle={activeSuggestion.title}
+          topics={topicsData?.topics || []}
+          onClose={() => setActiveSuggestion(null)}
+          onAdded={() => {
+            refreshSuggestions()
+          }}
+        />
+      )}
+
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 6, flexWrap: 'wrap' }}>
         <div className="page-title" style={{ marginBottom: 0 }}>AI Insights</div>
         <button
@@ -217,6 +241,28 @@ export function InsightsPage() {
         </div>
       )}
 
+      {/* Weak Topics Section */}
+      {weakTopics && weakTopics.length > 0 && (
+        <div style={{ marginBottom: 30 }}>
+          <div className="section-title">Weak Topic Detector</div>
+          <div className="grid-3">
+            {weakTopics.slice(0, 3).map((topic: Record<string, any>) => (
+              <InsightTip
+                key={String(topic.topic_id)}
+                icon={<AlertIcon />}
+                title={topic.topic_name}
+                item={{
+                  finding: `Efficiency: ${Math.round(topic.avg_efficiency)}% | Confidence: ${Number(topic.avg_confidence).toFixed(1)}/5`,
+                  action: "Prioritize this topic in your next study session."
+                }}
+                badge="terra"
+                badgeLabel="Needs Review"
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="grid-2" style={{ marginBottom: 20 }}>
         <div className="insight-card">
           <div className="insight-label">Today&apos;s Top Insight {top?.title ? `— ${top.title}` : ''}</div>
@@ -227,6 +273,11 @@ export function InsightsPage() {
           <div className="insight-actions">
             <button className="insight-btn insight-btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={() => onFeedback(top?.id, 'like')}><ThumbsUpIcon width={16} height={16} />Helpful</button>
             <button className="insight-btn insight-btn-ghost" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={() => onFeedback(top?.id, 'dislike')}><ThumbsDownIcon width={16} height={16} />Not now</button>
+            {top?.planSuggestion && (
+              <button className="insight-btn" style={{ background: 'var(--indigo)', color: 'white', display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={() => setActiveSuggestion({ suggestion: top.planSuggestion as PlanSuggestion, title: top.title })}>
+                <CalendarIcon width={16} height={16} /> Add to Plan
+              </button>
+            )}
           </div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
@@ -240,6 +291,7 @@ export function InsightsPage() {
                 item={item}
                 onLike={() => onFeedback(item.id, 'like')}
                 onDislike={() => onFeedback(item.id, 'dislike')}
+                onAddPlan={item.planSuggestion ? () => setActiveSuggestion({ suggestion: item.planSuggestion, title: item.title }) : undefined}
               />
             ))
           ) : (
@@ -294,6 +346,15 @@ export function InsightsPage() {
                     {item.finding && <div style={{marginBottom: 4, color: 'var(--text-soft)'}}>{item.finding}</div>}
                     {item.action ? <div style={{fontWeight: 500, color: 'var(--indigo)'}}>👉 {item.action}</div> : item.text}
                   </div>
+                  {item.planSuggestion && (
+                    <button
+                     className="insight-btn"
+                     style={{ background: '#fff', color: 'var(--indigo)', border: '1px solid var(--border)', fontSize: 11, padding: '4px 8px' }}
+                     onClick={() => setActiveSuggestion({ suggestion: item.planSuggestion as PlanSuggestion, title: item.title })}
+                    >
+                      + Add to Plan
+                    </button>
+                  )}
                   {item.isPlan && <Badge variant="indigo">Plan</Badge>}
                   <Badge variant={badgeMeta.badge}>{badgeMeta.label}</Badge>
                 </div>
@@ -310,13 +371,13 @@ export function InsightsPage() {
   )
 }
 
-function SmallInsight({ icon, title, color, item, onLike, onDislike }: { icon: ReactNode; title: string; color: string; item: any; onLike?: () => void; onDislike?: () => void }) {
+function SmallInsight({ icon, title, color, item, onLike, onDislike, onAddPlan }: { icon: ReactNode; title: string; color: string; item: any; onLike?: () => void; onDislike?: () => void; onAddPlan?: () => void }) {
   const { showToast } = useToast()
   return (
     <div className="card" style={{ padding: '16px 18px' }}>
       <div style={{ display: 'flex', gap: 11, alignItems: 'flex-start' }}>
         <div style={{ width: 34, height: 34, borderRadius: 'var(--r-sm)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, border: '1.5px solid var(--border)', background: 'linear-gradient(160deg, #FFFFFF 0%, #FFF8F2 100%)', color: 'var(--text-mid)' }}>{icon}</div>
-        <div>
+        <div style={{ flex: 1 }}>
           <div style={{ fontSize: '12.5px', fontWeight: 600, color, marginBottom: 4 }}>{item?.title || title}</div>
           <div style={{ fontSize: '12.5px', color: 'var(--text-mid)', lineHeight: 1.5 }}>
             {item?.finding && <div style={{marginBottom: 4, color: 'var(--text-soft)'}}>{item.finding}</div>}
@@ -324,9 +385,16 @@ function SmallInsight({ icon, title, color, item, onLike, onDislike }: { icon: R
           </div>
         </div>
       </div>
-      <div style={{ marginTop: 9, display: 'flex', gap: 7 }}>
-        <button className="insight-btn" style={{ background: color, color: 'white', padding: '5px 12px', display: 'inline-flex', alignItems: 'center' }} onClick={onLike || (() => showToast('Feedback recorded!', 'info'))}><ThumbsUpIcon width={16} height={16} /></button>
-        <button className="insight-btn insight-btn-ghost" style={{ color: 'var(--text-soft)', borderColor: 'var(--border)', padding: '5px 12px', display: 'inline-flex', alignItems: 'center' }} onClick={onDislike || (() => showToast('Dismissed', 'info'))}><ThumbsDownIcon width={16} height={16} /></button>
+      <div style={{ marginTop: 9, display: 'flex', gap: 7, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 7 }}>
+          <button className="insight-btn" style={{ background: color, color: 'white', padding: '5px 12px', display: 'inline-flex', alignItems: 'center' }} onClick={onLike || (() => showToast('Feedback recorded!', 'info'))}><ThumbsUpIcon width={16} height={16} /></button>
+          <button className="insight-btn insight-btn-ghost" style={{ color: 'var(--text-soft)', borderColor: 'var(--border)', padding: '5px 12px', display: 'inline-flex', alignItems: 'center' }} onClick={onDislike || (() => showToast('Dismissed', 'info'))}><ThumbsDownIcon width={16} height={16} /></button>
+        </div>
+        {onAddPlan && (
+          <button className="insight-btn" style={{ marginLeft: 'auto', background: 'var(--indigo)', color: 'white', padding: '5px 12px', fontSize: 12 }} onClick={onAddPlan}>
+            + Add to Plan
+          </button>
+        )}
       </div>
     </div>
   )

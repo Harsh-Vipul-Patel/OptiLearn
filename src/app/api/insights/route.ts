@@ -19,8 +19,10 @@ export async function GET(request: Request) {
     const suggestions = todaySuggestions.length > 0
       ? todaySuggestions
       : await InsightsService.getSuggestions(user.id, 20)
+      
+    const weakTopics = await InsightsService.getWeakTopics(user.id)
 
-    return NextResponse.json({ suggestions }, { status: 200 })
+    return NextResponse.json({ suggestions, weakTopics }, { status: 200 })
   } catch (error) {
     console.error('[insights/GET] Error:', error)
     if (error instanceof Error) {

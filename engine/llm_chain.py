@@ -516,6 +516,9 @@ HARD RULES — violate any and the response is discarded:
 4. CROSS-DIMENSION WINS. The most valuable insights combine two dimensions: \
    e.g. "PHONE distractions occur 75% during Evening sessions" is worth more than \
    "PHONE distractions occur frequently."
+5. PLAN SUGGESTIONS: For PLANNING_ACCURACY and SUBJECT_SLOT type insights ONLY, \
+   you MUST include a "plan_suggestion" field that specifies a concrete scheduling fix. \
+   Use valid time_slot values: Morning, Afternoon, Evening, Night.
 
 ANTI-REPHRASE TEST (apply before writing each insight):
   Ask: "Could the student have said this just by reading their own log?"
@@ -535,9 +538,17 @@ Schema:
     "title": "<max 12 words, MUST include a number from the data>",
     "finding": "<2 sentences: what the pattern shows + why it matters for this student>",
     "action": "<2 sentences: mechanical step executable tomorrow, not generic advice>",
-    "priority": <1=most urgent, 2, 3>
+    "priority": <1=most urgent, 2, 3>,
+    "plan_suggestion": {
+      "subject_hint": "<subject name from data, e.g. Physics>",
+      "time_slot": "<Morning | Afternoon | Evening | Night>",
+      "duration_minutes": <integer, e.g. 60>,
+      "reason": "<1 sentence explaining why this slot and duration were chosen>"
+    }
   }
-]"""
+]
+Note: plan_suggestion is REQUIRED for PLANNING_ACCURACY and SUBJECT_SLOT types. \
+For DISTRACTION, FATIGUE, DEEP_WORK, COMPLETION types it MUST be omitted entirely."""
 
     MIN_DATA_QUALITY    = 0.30
     EFFICIENCY_RANGE    = (0, 100)
@@ -899,9 +910,16 @@ Schema:
             validated: List[str] = []
             _number_re = re.compile(r"\d")  # title must contain at least one digit
 
+            # Patterns for extracting plan suggestion from action text (fallback)
+            _slot_re     = re.compile(r"\b(morning|afternoon|evening|night)\b", re.I)
+            _duration_re = re.compile(r"(\d{2,3})\s*(?:min|minutes?)", re.I)
+            _subject_re  = re.compile(r"\b([A-Z][a-z]+(?:\s[A-Z][a-z]+)?)\b")
+            _planning_types = {"PLANNING_ACCURACY", "SUBJECT_SLOT"}
+
             for item in items[:6]:
-                title  = str(item.get("title", "")).strip()
-                action = str(item.get("action", "")).strip()
+                title       = str(item.get("title", "")).strip()
+                action      = str(item.get("action", "")).strip()
+                insight_type = str(item.get("type", "")).strip().upper()
 
                 # Gate 1: title must cite a number
                 if not _number_re.search(title):
@@ -912,6 +930,33 @@ Schema:
                 if len(action) < 20:
                     logger.warning("Dropping insight — action too short: %s", action)
                     continue
+
+                # ── Ensure plan_suggestion is well-formed for planning types ──
+                if insight_type in _planning_types:
+                    ps = item.get("plan_suggestion")
+                    if not isinstance(ps, dict):
+                        # LLM didn't emit one — synthesize from action text
+                        slot_match     = _slot_re.search(action)
+                        dur_match      = _duration_re.search(action)
+                        subj_match     = _subject_re.search(title)
+                        item["plan_suggestion"] = {
+                            "subject_hint":     subj_match.group(1) if subj_match else "",
+                            "time_slot":        slot_match.group(1).capitalize() if slot_match else "Morning",
+                            "duration_minutes": int(dur_match.group(1)) if dur_match else 60,
+                            "reason":           action[:120],
+                        }
+                    else:
+                        # Normalise time_slot capitalisation
+                        raw_slot = str(ps.get("time_slot", "Morning"))
+                        ps["time_slot"] = raw_slot.capitalize() if raw_slot.lower() in (
+                            "morning", "afternoon", "evening", "night"
+                        ) else "Morning"
+                        if not isinstance(ps.get("duration_minutes"), int):
+                            ps["duration_minutes"] = 60
+                        item["plan_suggestion"] = ps
+                else:
+                    # Non-planning types must NOT carry a plan_suggestion
+                    item.pop("plan_suggestion", None)
 
                 validated.append(json.dumps(item))
 

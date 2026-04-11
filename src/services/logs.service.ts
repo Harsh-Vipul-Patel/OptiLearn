@@ -9,6 +9,9 @@ type LogWithOwnership = {
   analyzed_at?: string | null
   dailyPlan?: {
     topic_id?: string
+    start_time?: string | null
+    end_time?: string | null
+    target_duration?: number | null
     studyTopic?: {
       subject?: {
         user_id?: string
@@ -75,6 +78,9 @@ export class LogsService {
           plan_date,
           time_slot,
           topic_id,
+          start_time,
+          end_time,
+          target_duration,
           studyTopic:study_topic (
             subject_id,
             subject:subject (

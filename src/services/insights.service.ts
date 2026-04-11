@@ -86,4 +86,21 @@ export class InsightsService {
       created_at: row.created_at,
     }))
   }
+
+  static async getWeakTopics(userId: string) {
+    const supabase = createClient()
+    const { data, error } = await supabase
+      .from('vw_user_topic_stats')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('is_weak', true)
+
+    if (error) {
+      // Return empty if the view migration hasn't been run yet (graceful fallback)
+      console.warn('getWeakTopics failed (maybe view not created yet?):', error)
+      return []
+    }
+
+    return data ?? []
+  }
 }

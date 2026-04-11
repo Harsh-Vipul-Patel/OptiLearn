@@ -42,6 +42,7 @@ export function useSuggestionsSync(userId: string) {
   )
   return {
     suggestions: (data?.suggestions ?? []) as Record<string, unknown>[],
+    weakTopics: (data?.weakTopics ?? []) as Record<string, unknown>[],
     isLoading,
     refreshSuggestions: () => mutate(),
   }
