@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { AnalyticsIcon, BrainIcon, SparklesIcon, CalendarIcon, TargetIcon, FlameIcon, AlertIcon } from '@/components/ui/AppIcons'
+import { AnalyticsIcon, BrainIcon, SparklesIcon, CalendarIcon, TargetIcon, FlameIcon, AlertIcon, TimerIcon, BookIcon, MoonIcon, CheckCircleIcon } from '@/components/ui/AppIcons'
 
 export default function FeaturesPage() {
   return (
@@ -23,21 +23,24 @@ export default function FeaturesPage() {
       {/* Hero */}
       <div className="landing-hero" style={{ flexDirection: 'column', textAlign: 'center', gap: 24, paddingBottom: 80, alignItems: 'center' }}>
         <div style={{ animation: 'slideUp .55s cubic-bezier(.22,.68,0,1.1) both', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-          <div className="hero-eyebrow"><SparklesIcon width={14} height={14} />Advanced Study Tools</div>
+          <div className="hero-eyebrow"><SparklesIcon width={14} height={14} />Adaptive Study Intelligence</div>
           <div className="hero-title" style={{ maxWidth: 800 }}>Everything you need to <em>excel.</em></div>
           <p style={{ fontSize: '16.5px', color: 'var(--text-mid)', lineHeight: 1.7, maxWidth: 640, margin: '24px auto 42px' }}>
-            A complete suite of AI-driven study tools engineered to boost retention, maintain consistency, and prevent academic burnout before it happens.
+            A complete suite of AI-driven tools — from cognitive load analysis and procrastination detection to LLM-powered recommendations that turn into real study plans with one click.
           </p>
         </div>
         
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 24, width: '100%', maxWidth: 1040, animation: 'fadeIn .7s .25s both', textAlign: 'left' }}>
           {[
-            { title: 'Smart Study Planner', icon: <CalendarIcon width={24} height={24} />, desc: 'Map out your study blocks across custom time slots. Let the system intelligently warn you of scheduling conflicts.' },
-            { title: 'AI Recommendations', icon: <BrainIcon width={24} height={24} />, desc: 'Receive personalized scheduling tips based on your peak cognitive hours and subject difficulty thresholds.' },
-            { title: 'Deep Analytics', icon: <AnalyticsIcon width={24} height={24} />, desc: 'Visualize your progress. Track subject mastery and identify your weakest links through dynamic charts.' },
-            { title: 'Burnout Detection', icon: <AlertIcon width={24} height={24} />, desc: 'Our algorithm monitors your study volume and intensity to flag early signs of exhaustion before you crash.' },
-            { title: 'Daily Goal Tracking', icon: <TargetIcon width={24} height={24} />, desc: 'Set and crush daily milestones. Watch your execution percentage climb as you log completed sessions.' },
-            { title: 'Session Logging & Streaks', icon: <FlameIcon width={24} height={24} />, desc: 'Gamify your study routine. Build impressive daily streaks and turn studying into a rewarding habit.' },
+            { title: 'Smart Study Planner', icon: <CalendarIcon width={24} height={24} />, desc: 'Build daily study plans with Morning / Afternoon / Evening / Night slots, optional start & end times, difficulty tagging, and subject color coding. The database enforces overlap-free scheduling.' },
+            { title: 'Session Logger', icon: <TimerIcon width={24} height={24} />, desc: 'Record exactly what happened — focus level, fatigue, distraction types (Phone, Noise, Social Media, etc.), and reflections. Every log auto-triggers the AI engine for real-time analysis.' },
+            { title: 'AI Insights Engine', icon: <BrainIcon width={24} height={24} />, desc: 'A 4-node LangGraph pipeline computes 8 cross-dimensional patterns — planning accuracy, fatigue curves, deep work ratio, and more — before sending them to Groq LLaMA 3.3 70B for evidence-based, non-generic recommendations.' },
+            { title: 'Insight → Action Loop', icon: <SparklesIcon width={24} height={24} />, desc: 'AI recommendations include structured plan suggestions. Click "Add to Plan" to convert an insight into an actual study schedule entry — closing the loop between analysis and action in one click.' },
+            { title: 'Deep Analytics', icon: <AnalyticsIcon width={24} height={24} />, desc: 'Multi-tab dashboard with Planned vs Actual charts, Subject Priority Matrix, Focus by Day, a 4-week Activity Heatmap, and Efficiency by Weekday. Plus a 3-3-3 Weekly Digest (3 Wins, 3 Issues, 3 Actions) exportable as PDF.' },
+            { title: 'Burnout & Wellness Monitor', icon: <AlertIcon width={24} height={24} />, desc: 'Daily wellness check-in captures 8 neuro-cognitive signals (sleep, energy, stress, mood, exercise, meals, screen time) to compute a Readiness Score. Burnout risk is classified from a 7-session fatigue-consistency-focus blend.' },
+            { title: 'Procrastination Tracker', icon: <TargetIcon width={24} height={24} />, desc: 'A PostgreSQL view automatically detects skipped (no log) and abandoned (<50% target) sessions. Dashboard shows procrastination score, risk level, and skipped counts by subject with start-delay analysis.' },
+            { title: 'Knowledge Vault', icon: <BookIcon width={24} height={24} />, desc: 'Paste study notes and AI generates flashcard Q&A pairs. Enter Active Recall Test mode to flip cards one at a time, rate confidence 1–5, and track response time per card for weak-topic analysis.' },
+            { title: 'Streaks & Gamification', icon: <FlameIcon width={24} height={24} />, desc: 'Daily study streaks, goal ring progress visualization, stat cards with week-over-week deltas, and exam readiness tracking — turning every session into measurable progress toward your target.' },
           ].map(feature => (
             <div key={feature.title} className="card-flat" style={{ padding: 28 }}>
               <div style={{ width: 52, height: 52, borderRadius: 14, background: 'var(--terra-light)', color: 'var(--terra)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
@@ -51,6 +54,11 @@ export default function FeaturesPage() {
               </div>
             </div>
           ))}
+        </div>
+
+        {/* Bottom CTA */}
+        <div style={{ marginTop: 24, animation: 'fadeIn .8s .45s both' }}>
+          <Link href="/login" className="btn-primary" style={{ padding: '14px 32px', fontSize: 15 }}>Start optimizing for free →</Link>
         </div>
       </div>
     </div>
