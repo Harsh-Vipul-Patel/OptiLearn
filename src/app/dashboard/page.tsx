@@ -272,7 +272,13 @@ export default function DashboardPage() {
       <div className="page-header">
         <div>
           <div className="page-title">
-            Good morning, {session?.user?.name?.split(' ')[0] || 'there'}
+            {(() => {
+              const hour = new Date().getHours();
+              if (hour >= 5 && hour < 12) return 'Good morning';
+              if (hour >= 12 && hour < 17) return 'Good afternoon';
+              if (hour >= 17 && hour < 21) return 'Good evening';
+              return 'Welcome back';
+            })()}, {session?.user?.name?.split(' ')[0] || 'there'}
           </div>
           <div className="page-sub">
             {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}

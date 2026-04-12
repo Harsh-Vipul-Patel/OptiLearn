@@ -324,9 +324,9 @@ export function VaultPage() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div className="section-title" style={{ margin: 0 }}>AI Generated Flashcards</div>
                 <button 
-                  className="insight-btn" 
+                  className="insight-btn insight-btn-primary" 
                   onClick={handleStartTest}
-                  style={{ background: 'var(--primary)', color: '#fff', border: 'none', padding: '6px 16px' }}
+                  style={{ padding: '6px 16px' }}
                 >
                   Start Recall Test
                 </button>
