@@ -200,7 +200,6 @@ Risk: **Low** (<40) · **Medium** (40–67) · **High** (≥67)
 ```
 
 **Views:**
-- `weak_topics_stats` — topics with avg_confidence ≤ 3 or avg_efficiency < 65%
 - `procrastination_stats` — skipped/abandoned sessions per subject
 
 <br>
@@ -251,66 +250,6 @@ Risk: **Low** (<40) · **Medium** (40–67) · **High** (≥67)
 | 🌐 **CORS** | Restricted to configured allowed origins only |
 | 🔒 **Password Safety** | `password_hash` never exposed to client responses |
 | ✅ **Input Validation** | Server-side normalization for all enum fields |
-
-<br>
-
-## 🚀 Getting Started
-
-### Prerequisites
-
-| Tool | Version |
-|------|---------|
-| Node.js | 18+ |
-| Python | 3.10+ |
-| npm | 9+ |
-| pip | Latest |
-
-### 1️⃣ Clone & Install Frontend
-
-```bash
-git clone https://github.com/Harsh-Vipul-Patel/OptiLearn.git
-cd OptiLearn
-npm install
-```
-
-### 2️⃣ Configure Environment
-
-```bash
-cp .env.example .env
-```
-
-Fill in your credentials:
-
-```env
-# Supabase (get from supabase.com/dashboard)
-NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_ANON_KEY=your-anon-key
-
-# Engine connection
-ENGINE_API_URL=http://localhost:8000
-ENGINE_API_KEY=your_64_char_secret
-```
-
-### 3️⃣ Run Frontend
-
-```bash
-npm run dev
-```
-
-Open **http://localhost:3000** 🌐
-
-### 4️⃣ Install & Run AI Engine
-
-```bash
-cd engine
-pip install -r requirements.txt
-uvicorn main:app --reload --port 8000
-```
-
-> **Engine requires** its own environment variables:  
-> `GROQ_API_KEY` · `ENGINE_API_KEY` · `CALLBACK_URL` · `ALLOWED_ORIGINS`
 
 <br>
 
@@ -366,7 +305,7 @@ OptiLearn/
 
 | Service | Hosts | URL |
 |---------|-------|-----|
-| **Frontend** | Vercel | `optilearn.vercel.app` |
+| **Frontend** | Vercel | [`optilearn-app.vercel.app`](https://optilearn-app.vercel.app/) |
 | **AI Engine** | Render | FastAPI server |
 | **Database** | Supabase | Managed PostgreSQL |
 | **LLM** | Groq Cloud | `llama-3.3-70b-versatile` |
