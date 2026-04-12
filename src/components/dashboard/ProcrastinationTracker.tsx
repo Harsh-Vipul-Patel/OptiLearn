@@ -12,9 +12,9 @@ interface ProcrastinationTrackerProps {
 }
 
 const RISK_CONFIG = {
-  Low:    { color: 'var(--sage)',   bg: 'rgba(107,155,122,0.12)', label: '🟢 Low Risk',    textColor: '#3d7a52' },
-  Medium: { color: 'var(--gold)',   bg: 'rgba(212,168,67,0.12)',  label: '🟡 Moderate',   textColor: '#8a6800' },
-  High:   { color: 'var(--terra)',  bg: 'rgba(201,107,58,0.12)',  label: '🔴 High Risk',   textColor: '#c04f20' },
+  Low:    { color: 'var(--sage)',   bg: 'rgba(107,155,122,0.12)', label: 'Low Risk',    textColor: '#3d7a52' },
+  Medium: { color: 'var(--gold)',   bg: 'rgba(212,168,67,0.12)',  label: 'Moderate',   textColor: '#8a6800' },
+  High:   { color: 'var(--terra)',  bg: 'rgba(201,107,58,0.12)',  label: 'High Risk',   textColor: '#c04f20' },
 }
 
 function formatDate(dateStr: string) {
@@ -109,7 +109,7 @@ export function ProcrastinationTracker({
           color: 'var(--text-soft)',
           textAlign: 'center',
         }}>
-          ✅ No procrastinated sessions detected. Great consistency!
+          No procrastinated sessions detected. Great consistency!
         </div>
       )}
 

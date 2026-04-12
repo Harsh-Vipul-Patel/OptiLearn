@@ -123,11 +123,11 @@ export async function POST(request: Request) {
     if (allRecs.length === 0) {
       console.log('[insights/POST] Engine returned 0 recommendations — using starter insights')
       allRecs.push(
-        '🎯 Start by logging your first study session in the Logger tab. The AI engine needs at least 1 session to generate personalized insights.',
-        '⏱️ Try the Pomodoro technique: study for 25 minutes, then take a 5-minute break. This builds focus without burnout.',
-        '📊 After logging 3+ sessions, the AI will identify your peak study times and recommend optimal schedules.',
-        '🧠 Rate your focus level honestly when logging — this helps the engine calibrate distractions and flow-state patterns.',
-        '📈 Consistency matters more than marathon sessions. Aim for regular 30–45 minute blocks across the week.',
+        'Start by logging your first study session in the Logger tab. The AI engine needs at least 1 session to generate personalized insights.',
+        'Try the Pomodoro technique: study for 25 minutes, then take a 5-minute break. This builds focus without burnout.',
+        'Review topics you studied today right before sleep — research shows this improves memory retention by 30%.',
+        'Rate your focus level honestly when logging — this helps the engine calibrate distractions and flow-state patterns.',
+        'Consistency matters more than marathon sessions. Aim for regular 30–45 minute blocks across the week.',
       )
     }
 

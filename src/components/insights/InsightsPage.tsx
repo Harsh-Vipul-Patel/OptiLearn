@@ -89,7 +89,7 @@ export function InsightsPage() {
           id,
           text,
           rawText,
-          type: isPlan ? '📋 Plan' : type,
+          type: isPlan ? 'Plan' : type,
           title,
           finding,
           action,

@@ -6,7 +6,6 @@ import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { useToast } from '@/components/ui/Toast'
 import { BrainIcon, SparklesIcon } from '@/components/ui/AppIcons'
-import { DependencyMap } from './DependencyMap'
 
 type Flashcard = {
   question: string;
@@ -225,7 +224,7 @@ export function VaultPage() {
           </Card>
         ) : (
           <Card style={{ padding: 40, textAlign: 'center' }}>
-            <div style={{ fontSize: 50, marginBottom: 20 }}>🎉</div>
+            <div style={{ fontSize: 50, marginBottom: 20 }}></div>
             <div className="section-title">Session Complete!</div>
             <p style={{ color: 'var(--text-soft)', marginBottom: 30 }}>You reviewed {flashcards.length} cards. Save this session to track your retention and feed your spaced repetition engine.</p>
             
@@ -270,8 +269,6 @@ export function VaultPage() {
     )
   }
 
-  const [activeTab, setActiveTab] = useState<'flashcards' | 'map'>('flashcards')
-
   // --- REGULAR VIEW --- //
 
   return (
@@ -283,26 +280,8 @@ export function VaultPage() {
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: 10, marginBottom: 20, borderBottom: '1.5px solid var(--border)', paddingBottom: 10 }}>
-        <button 
-          onClick={() => setActiveTab('flashcards')}
-          style={{ background: 'none', border: 'none', fontSize: 15, fontWeight: activeTab === 'flashcards' ? 600 : 500, color: activeTab === 'flashcards' ? 'var(--indigo)' : 'var(--text-soft)', cursor: 'pointer', padding: '6px 14px', borderRadius: 'var(--r-sm)', backgroundColor: activeTab === 'flashcards' ? 'var(--cream)' : 'transparent' }}
-        >
-          Study Generator
-        </button>
-        <button 
-          onClick={() => setActiveTab('map')}
-          style={{ background: 'none', border: 'none', fontSize: 15, fontWeight: activeTab === 'map' ? 600 : 500, color: activeTab === 'map' ? 'var(--indigo)' : 'var(--text-soft)', cursor: 'pointer', padding: '6px 14px', borderRadius: 'var(--r-sm)', backgroundColor: activeTab === 'map' ? 'var(--cream)' : 'transparent' }}
-        >
-          Dependency Map
-        </button>
-      </div>
-
-      {activeTab === 'map' ? (
-        <DependencyMap />
-      ) : (
-        <div className="grid-2" style={{ marginBottom: 20 }}>
-          <Card style={{ padding: 20 }}>
+      <div className="grid-2" style={{ marginBottom: 20 }}>
+        <Card style={{ padding: 20 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
             <div className="section-title" style={{ margin: 0 }}>Source Material</div>
             <button className="insight-btn insight-btn-ghost" onClick={handlePastePdf} style={{ fontSize: '12px', padding: '4px 10px' }}>
@@ -334,7 +313,7 @@ export function VaultPage() {
               disabled={isGenerating || text.trim().length === 0}
               style={{ padding: '8px 24px', opacity: (isGenerating || text.trim().length === 0) ? 0.6 : 1 }}
             >
-              {isGenerating ? 'Generating...' : '✨ Generate Flashcards'}
+              {isGenerating ? 'Generating...' : 'Generate Flashcards'}
             </button>
           </div>
         </Card>
@@ -349,7 +328,7 @@ export function VaultPage() {
                   onClick={handleStartTest}
                   style={{ background: 'var(--primary)', color: '#fff', border: 'none', padding: '6px 16px' }}
                 >
-                  ▶ Start Recall Test
+                  Start Recall Test
                 </button>
               </div>
               
@@ -392,7 +371,7 @@ export function VaultPage() {
           ) : (
             <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                <Card style={{ padding: '40px 20px', textAlign: 'center', borderStyle: 'dashed', background: 'transparent' }}>
-                 <div style={{ fontSize: 40, marginBottom: 10 }}>🧠</div>
+                 <div style={{ fontSize: 40, marginBottom: 10 }}></div>
                  <div style={{ fontWeight: 600, color: 'var(--text-mid)', marginBottom: 6 }}>Ready to Test You</div>
                  <div style={{ fontSize: '13px', color: 'var(--text-soft)' }}>
                    Paste your notes on the left and click generate.<br/>Our AI will extract the most important concepts into a flashcard deck.
@@ -401,8 +380,7 @@ export function VaultPage() {
             </div>
           )}
         </div>
-        </div>
-      )}
+      </div>
     </div>
   )
 }

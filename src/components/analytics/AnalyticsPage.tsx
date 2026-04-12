@@ -744,7 +744,7 @@ export function AnalyticsPage() {
                 {/* Wins */}
                 <div className="card" style={{ borderTop: '3px solid var(--sage)' }}>
                   <div className="section-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontSize: 20 }}>🏆</span> 3 Wins
+                    3 Wins
                   </div>
                   {digest.wins.length === 0 ? (
                     <div style={{ color: 'var(--text-soft)', fontSize: 13, fontStyle: 'italic' }}>No wins identified yet</div>
@@ -763,7 +763,7 @@ export function AnalyticsPage() {
                 {/* Issues */}
                 <div className="card" style={{ borderTop: '3px solid var(--terra)' }}>
                   <div className="section-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontSize: 20 }}>⚠️</span> 3 Issues
+                    3 Issues
                   </div>
                   {digest.issues.length === 0 ? (
                     <div style={{ color: 'var(--text-soft)', fontSize: 13, fontStyle: 'italic' }}>No issues found — keep it up!</div>
@@ -782,7 +782,7 @@ export function AnalyticsPage() {
                 {/* Actions */}
                 <div className="card" style={{ borderTop: '3px solid var(--indigo)' }}>
                   <div className="section-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontSize: 20 }}>🎯</span> 3 Actions
+                    3 Actions
                   </div>
                   {digest.actions.length === 0 ? (
                     <div style={{ color: 'var(--text-soft)', fontSize: 13, fontStyle: 'italic' }}>No actions needed yet</div>

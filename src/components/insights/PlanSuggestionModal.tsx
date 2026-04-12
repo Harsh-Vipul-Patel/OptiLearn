@@ -155,7 +155,7 @@ export function PlanSuggestionModal({
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 18 }}>
             <div>
               <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--indigo)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 4 }}>
-                🤖 AI Plan Suggestion
+                AI Plan Suggestion
               </div>
               <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-dark)', lineHeight: 1.35 }}>
                 {insightTitle}
@@ -182,7 +182,7 @@ export function PlanSuggestionModal({
               marginBottom: 18,
               lineHeight: 1.55,
             }}>
-              💡 {suggestion.reason}
+              {suggestion.reason}
             </div>
           )}
 

@@ -149,7 +149,7 @@ export function ExamReadinessCard({ goals, studiedHoursMap, subjects, onAdd, onD
 
       {goals.length === 0 ? (
         <div style={{ textAlign: 'center', color: 'var(--text-soft)', fontSize: 13, padding: '24px 0' }}>
-          <div style={{ fontSize: 32, marginBottom: 8 }}>🎯</div>
+          <div style={{ fontSize: 32, marginBottom: 8 }}></div>
           No exam goals yet. Add one to track your readiness!
         </div>
       ) : (

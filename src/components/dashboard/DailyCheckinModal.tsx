@@ -437,7 +437,7 @@ export function DailyCheckinModal({
               disabled={isSubmitting}
               style={{ width: '100%', justifyContent: 'center' }}
             >
-              {isSubmitting ? 'Saving…' : '✨ Start My Day'}
+              {isSubmitting ? 'Saving…' : 'Start My Day'}
             </button>
           )}
         </div>
