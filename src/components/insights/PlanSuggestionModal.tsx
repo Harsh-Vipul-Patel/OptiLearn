@@ -133,14 +133,16 @@ export function PlanSuggestionModal({
           justifyContent: 'center',
           padding: '16px',
           animation: 'fadeIn .18s ease both',
+          userSelect: 'none',
         }}
         onClick={(e) => {
           if (e.target === e.currentTarget) onClose()
         }}
       >
+        <style>{`.spin-anim { animation: spin 1s linear infinite; } @keyframes spin { 100% { transform: rotate(360deg); } }`}</style>
         <div
           style={{
-            background: 'var(--surface)',
+            background: 'linear-gradient(160deg, #FFFFFF 0%, #FFFBF6 100%)',
             border: '1px solid var(--border)',
             borderRadius: 'var(--r-lg)',
             padding: '26px 28px',
@@ -327,9 +329,18 @@ export function PlanSuggestionModal({
                 fontSize: '13.5px',
                 cursor: isAdding || topics.length === 0 ? 'not-allowed' : 'pointer',
                 opacity: isAdding || topics.length === 0 ? 0.7 : 1,
-                transition: 'opacity .15s',
+                transition: 'all .15s',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
               }}
             >
+              {isAdding && (
+                <svg className="spin-anim" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
+                </svg>
+              )}
               {isAdding ? 'Adding…' : '+ Add to Plan'}
             </button>
             <button

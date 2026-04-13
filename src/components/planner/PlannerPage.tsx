@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect } from 'react'
 import { useToast } from '@/components/ui/Toast'
 import { useSuggestionsSync } from '@/hooks/useStudyLogSync'
 import { useSession } from '@/components/Providers'
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { DatePicker } from '@/components/ui/DatePicker'
 import { CustomSelect } from '@/components/ui/CustomSelect'
@@ -215,6 +216,15 @@ function getTodayDateKey(): string {
 }
 const today = getTodayDateKey()
 
+function getTomorrowDateKey(): string {
+  const tomorrow = new Date()
+  tomorrow.setDate(tomorrow.getDate() + 1)
+  const year = tomorrow.getFullYear()
+  const month = String(tomorrow.getMonth() + 1).padStart(2, '0')
+  const day = String(tomorrow.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 function getBlockTimeRange(block: PlanBlock, ranges: SlotRanges): { start: number; end: number } | null {
   if (block.startTime && block.endTime) {
     const start = timeToMinutes(block.startTime)
@@ -308,16 +318,23 @@ export function PlannerPage() {
   const { data: session } = useSession()
   const { showToast } = useToast()
   const { suggestions } = useSuggestionsSync(session?.user?.id || '')
+  
+  const searchParams = useSearchParams()
+  const prefillSubjectName = searchParams.get('prefill_subject_name')
+  const prefillTopicName = searchParams.get('prefill_topic_name')
+  const prefillDate = searchParams.get('prefill_date')
+  
+  const initialDate = prefillDate === 'tomorrow' ? getTomorrowDateKey() : today
 
   const [subjects, setSubjects] = useState<Subject[]>([])
   const [subjectsLoading, setSubjectsLoading] = useState(true)
   const [planBlocks, setPlanBlocks] = useState<PlanBlock[]>([])
-  const [selectedPlanDate, setSelectedPlanDate] = useState(today)
+  const [selectedPlanDate, setSelectedPlanDate] = useState(initialDate)
   const [saving, setSaving] = useState(false)
   const [selColor, setSelColor] = useState<SubjectColor>(PALETTE[0])
   const [newName, setNewName] = useState('')
   const [qaSubject, setQaSubject] = useState('')
-  const [qaTopic, setQaTopic] = useState('')
+  const [qaTopic, setQaTopic] = useState(prefillTopicName || '')
   const [qaTime, setQaTime] = useState<SlotName>('Morning')
   const [qaUseCustomTime, setQaUseCustomTime] = useState(false)
   const [qaStartTime, setQaStartTime] = useState('09:00')
@@ -370,12 +387,21 @@ export function PlannerPage() {
             }
           }
 
+          if (prefillSubjectName) {
+            const matched = loadedSubjects.find((s: Subject) => s.name.toLowerCase() === prefillSubjectName.toLowerCase())
+            if (matched) {
+              setQaSubject(matched.id)
+            } else {
+              setQaSubject(loadedSubjects[0]?.id || '')
+            }
+          }
+
           setSubjects(loadedSubjects)
         }
       })
       .catch(console.error)
       .finally(() => setSubjectsLoading(false))
-  }, [session?.user?.id])
+  }, [session?.user?.id, prefillSubjectName])
 
   /* ── Load plans for selected date ── */
   useEffect(() => {

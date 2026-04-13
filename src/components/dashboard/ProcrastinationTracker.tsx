@@ -172,7 +172,7 @@ export function ProcrastinationTracker({
                 {plan.procrastination_status}
               </span>
               <Link
-                href={`/dashboard/planner?prefill_topic_id=${plan.plan_id}&prefill_date=tomorrow`}
+                href={`/dashboard/planner?prefill_subject_name=${encodeURIComponent(plan.subject_name)}&prefill_topic_name=${encodeURIComponent(plan.topic_name)}&prefill_date=tomorrow`}
                 style={{
                   fontSize: '10.5px',
                   fontWeight: 600,
